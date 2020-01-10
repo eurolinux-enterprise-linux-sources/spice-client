@@ -1,0 +1,278 @@
+From e52cba15b507969795d9bd41f2595f3ca2635fa9 Mon Sep 17 00:00:00 2001
+From: Arnon Gilboa <agilboa@redhat.com>
+Date: Thu, 26 Nov 2009 13:22:27 +0200
+Subject: [PATCH 29/46] client: add xinerama support
+
+RHEL-6 Bugzilla: 695323
+
+cherry-picked from qspice commit
+ 003667ac99beeec9b330a07bc3569c59a96d4588
+ which fixes RHEL-5 541566
+
+with merge of the one line qspice fix to SPICE_REQUIRES:
+ 9f3fe4755f11044a45c4b21148466a997fcbf735
+ spice: fixed reference to xinerama pkg config file
+ (Xinerama.pc=>xinerama.pc)
+ Author: Yonit Halperin <yhalperi@redhat.com>
+---
+ client/x11/Makefile.am  |    2 +
+ client/x11/platform.cpp |  147 +++++++++++++++++++++++++++++++++++++++++++++++
+ configure.ac            |   15 +++++
+ 3 files changed, 164 insertions(+), 0 deletions(-)
+
+diff --git a/client/x11/Makefile.am b/client/x11/Makefile.am
+index 7504833..f2c9fcc 100644
+--- a/client/x11/Makefile.am
++++ b/client/x11/Makefile.am
+@@ -29,6 +29,7 @@ INCLUDES = \
+ 	$(WARN_CFLAGS)                                  \
+ 	$(SPICE_NONPKGCONFIG_CFLAGS)			\
+ 	$(SMARTCARD_CFLAGS)				\
++	$(XINERAMA_CFLAGS)				\
+ 	$(NULL)
+ 
+ 
+@@ -210,6 +211,7 @@ spicec_LDFLAGS = \
+ 	$(CEGUI06_LIBS)					\
+ 	$(JPEG_LIBS)					\
+ 	$(Z_LIBS)					\
++	$(XINERAMA_LIBS)				\
+ 	$(SMARTCARD_LIBS)				\
+ 	$(SPICE_NONPKGCONFIG_LIBS)
+ 
+diff --git a/client/x11/platform.cpp b/client/x11/platform.cpp
+index b0f7823..4ea63dc 100644
+--- a/client/x11/platform.cpp
++++ b/client/x11/platform.cpp
+@@ -71,6 +71,11 @@
+ #define USE_XRANDR_1_2
+ #endif
+ 
++#ifdef HAVE_XINERAMA
++#include <X11/extensions/Xinerama.h>
++#define USE_XINERAMA_1_0
++#endif
++
+ static Display* x_display = NULL;
+ static bool x_shm_avail = false;
+ static XVisualInfo **vinfo = NULL;
+@@ -103,6 +108,10 @@ static bool using_xfixes_1_0 = false;
+ static int xfixes_event_base;
+ static int xfixes_error_base;
+ 
++#ifdef USE_XINERAMA_1_0
++static bool using_xinerama_1_0 = false;
++#endif
++
+ static unsigned int caps_lock_mask = 0;
+ static unsigned int num_lock_mask = 0;
+ 
+@@ -1066,6 +1075,91 @@ bool DynamicScreen::set_screen_size(int size_index)
+     return true;
+ }
+ 
++#ifdef USE_XINERAMA_1_0
++
++class XineramaMonitor;
++typedef std::list<XineramaMonitor*> XineramaMonitorsList;
++
++class XineramaScreen : public XScreen {
++public:
++    XineramaScreen(Display* display, int screen, int& next_mon_id, XineramaScreenInfo* xin_screens,
++                   int num_xin_screens);
++    virtual ~XineramaScreen();
++
++    void publish_monitors(MonitorsList& monitors);
++
++private:
++    XineramaMonitorsList _monitors;
++};
++
++class XineramaMonitor : public Monitor {
++public:
++    XineramaMonitor(int id, XineramaScreenInfo& xin_screen);
++
++    virtual void do_set_mode(int width, int height);
++    virtual void do_restore() {}
++    virtual int get_depth() { return 32;}
++    virtual SpicePoint get_position() { return _position;}
++    virtual SpicePoint get_size() const { return _size;}
++    virtual bool is_out_of_sync() { return _out_of_sync;}
++    virtual int get_screen_id() { return 0;}
++
++private:
++    SpicePoint _position;
++    SpicePoint _size;
++    bool _out_of_sync;
++};
++
++XineramaScreen::XineramaScreen(Display* display, int screen, int& next_mon_id,
++                               XineramaScreenInfo* xin_screens, int num_xin_screens)
++    : XScreen(display, screen)
++{
++    X_DEBUG_SYNC(display);
++    for (int i = 0; i < num_xin_screens; i++) {
++        _monitors.push_back(new XineramaMonitor(next_mon_id++, xin_screens[i]));
++    }
++    Window root_window = RootWindow(display, screen);
++    XSelectInput(display, root_window, StructureNotifyMask);
++    XRRSelectInput(display, root_window, RRScreenChangeNotifyMask);     // TODO: this fails if we don't have RR extension (but do have XINERAMA)
++    XPlatform::set_win_proc(root_window, root_win_proc);     // Xlib:  extension "RANDR" missing on display ":3.0".
++    X_DEBUG_SYNC(display);
++}
++
++XineramaScreen::~XineramaScreen()
++{
++    while (!_monitors.empty()) {
++        XineramaMonitor* monitor = _monitors.front();
++        _monitors.pop_front();
++        delete monitor;
++    }
++}
++
++void XineramaScreen::publish_monitors(MonitorsList& monitors)
++{
++    XineramaMonitorsList::iterator iter = _monitors.begin();
++    for (; iter != _monitors.end(); iter++) {
++        monitors.push_back(*iter);
++    }
++}
++
++XineramaMonitor::XineramaMonitor(int id, XineramaScreenInfo& screen_info)
++    : Monitor(id)
++    , _out_of_sync (false)
++{
++    _position.x = screen_info.x_org;
++    _position.y = screen_info.y_org;
++    _size.x = screen_info.width;
++    _size.y = screen_info.height;
++}
++
++
++void XineramaMonitor::do_set_mode(int width, int height)
++{
++    _out_of_sync = width > _size.x || height > _size.y;
++}
++
++#endif
++
+ #ifdef USE_XRANDR_1_2
+ 
+ class MultyMonScreen: public XScreen {
+@@ -2317,6 +2411,35 @@ void XMonitor::set_mode(const XRRModeInfo& mode)
+ 
+ #endif
+ 
++#ifdef USE_XINERAMA_1_0
++
++static XineramaScreenInfo* init_xinerama_screens(int* num_xin_screens)
++{
++    XineramaScreenInfo* xin_screens = NULL;
++
++    if (using_xinerama_1_0 && ScreenCount(x_display) == 1) {
++        int ncrtc = 0;
++#ifdef USE_XRANDR_1_2
++        if (using_xrandr_1_2) {
++            AutoScreenRes res(XRRGetScreenResources(x_display, RootWindow(x_display, 0)));
++            if (res.valid()) {
++                ncrtc = res->ncrtc;
++            }
++        }
++#endif
++        if (ncrtc < 2) {
++            xin_screens = XineramaQueryScreens(x_display, num_xin_screens);
++        }
++    }
++    if (xin_screens && *num_xin_screens < 2) {
++        XFree(xin_screens);
++        return NULL;
++    }
++    return xin_screens;
++}
++
++#endif
++
+ static MonitorsList monitors;
+ static Monitor* primary_monitor = NULL;
+ 
+@@ -2327,6 +2450,15 @@ const MonitorsList& Platform::init_monitors()
+ {
+     int next_mon_id = 0;
+     ASSERT(screens.empty());
++
++#ifdef USE_XINERAMA_1_0
++    int num_xin_screens;
++    XineramaScreenInfo* xin_screens = init_xinerama_screens(&num_xin_screens);
++    if (xin_screens) {
++        screens.push_back(new XineramaScreen(x_display, 0, next_mon_id, xin_screens, num_xin_screens));
++        XFree(xin_screens);
++    } else
++#endif
+ #ifdef USE_XRANDR_1_2
+     if (using_xrandr_1_2) {
+         for (int i = 0; i < ScreenCount(x_display); i++) {
+@@ -2947,6 +3079,20 @@ static void init_xrender()
+         XRenderQueryVersion(x_display, &major, &minor) && (major > 0 || minor >= 5);
+ }
+ 
++static void init_xinerama()
++{
++#ifdef USE_XINERAMA_1_0
++    int event_base;
++    int error_base;
++    int major;
++    int minor;
++
++    using_xinerama_1_0 = XineramaQueryExtension(x_display, &event_base, &error_base) &&
++        XineramaQueryVersion(x_display, &major, &minor) && major >= 1 && minor >= 0 &&
++        XineramaIsActive(x_display);
++#endif
++}
++
+ static void init_xfixes()
+ {
+     int major;
+@@ -3171,6 +3317,7 @@ void Platform::init()
+     init_xrender();
+     init_xfixes();
+     init_XIM();
++    init_xinerama();
+ 
+     struct sigaction act;
+     memset(&act, 0, sizeof(act));
+diff --git a/configure.ac b/configure.ac
+index 678a6af..0fb0ba6 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -275,6 +275,19 @@ if test "$red_target" = "x11"; then
+ 	SPICE_REQUIRES+=" x11 xext xrender"
+ fi
+ 
++PKG_CHECK_MODULES(XINERAMA,
++        xinerama >= 1.0,
++        have_xinerama=yes,
++        have_xinerama=no)
++
++AM_CONDITIONAL([HAVE_XINERAMA], [test "x$have_xinerama" = "xyes"])
++if test "x$have_xinerama" = "xyes" ; then
++  AC_DEFINE([HAVE_XINERAMA], [], [Define if we have Xinerama])
++  AC_SUBST(XINERAMA_CFLAGS)
++  AC_SUBST(XINERAMA_LIBS)
++  SPICE_REQUIRES+=" xinerama"
++fi
++
+ # Add parameter for (partial) static linkage of spice client.
+ # this is used to achive single binary package for all (?) distros.
+ AC_ARG_ENABLE(static-linkage,
+@@ -511,6 +524,8 @@ echo "
+ 
+         Have XRANDR 1.2:          ${have_xrandr12}
+ 
++        Have Xinerama:            ${have_xinerama}
++
+         Support tunneling:        ${enable_tunnel}
+ 
+         Red target:               ${red_target}
+-- 
+1.7.7.6
+

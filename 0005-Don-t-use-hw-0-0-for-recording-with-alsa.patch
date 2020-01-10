@@ -1,0 +1,31 @@
+From 842cb99e5fbed2bc9aae61f307cd0274e8e3dc5c Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Tue, 31 Jan 2012 16:40:57 +0100
+Subject: [PATCH 33/46] Don't use "hw:0,0" for recording with alsa
+
+We currently hardcode this device when spicec needs to record with
+alsa. However, this doesn't interact well with PulseAudio, which
+means that if something is already using the recording device, spicec
+won't be able to open it again.
+Using "default" as the device will let spicec use the PulseAudio
+alsa support and will avoid this issue.
+---
+ client/x11/record.cpp |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/client/x11/record.cpp b/client/x11/record.cpp
+index 4ef9228..b9c1e8c 100644
+--- a/client/x11/record.cpp
++++ b/client/x11/record.cpp
+@@ -93,7 +93,7 @@ bool WaveRecorder::init(uint32_t sampels_per_sec,
+                         uint32_t channels)
+ {
+     const int frame_size = WaveRecordAbstract::FRAME_SIZE;
+-    const char* pcm_device = "hw:0,0"; // "default" ???
++    const char* pcm_device = "default";
+     snd_pcm_format_t format;
+     int err;
+ 
+-- 
+1.7.7.6
+

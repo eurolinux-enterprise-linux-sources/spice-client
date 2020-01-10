@@ -1,6 +1,6 @@
 Name:           spice-client
 Version:        0.8.2
-Release:        7%{?dist}
+Release:        7%{?dist}.2
 Summary:        Implements the client side of the SPICE protocol
 Group:          User Interface/Desktops
 License:        LGPLv2+
@@ -39,6 +39,11 @@ Patch26:         seamless-0021-client-display-channel-destroy-all-surfaces-on-di
 Patch27:         seamless-0022-client-support-semi-seamless-migration-between-spice.patch
 Patch28:         seamless-0023-Release-0.8.3.patch
 
+#bug 771323
+Patch30:         0001-client-add-xinerama-support.patch
+#bug 790892
+Patch31:         0005-Don-t-use-hw-0-0-for-recording-with-alsa.patch
+
 
 BuildRoot:      %{_tmppath}/%{tarname}-%{version}-%{release}-root-%(%{__id_u} -n)
 ExclusiveArch:  i686 x86_64
@@ -53,6 +58,7 @@ BuildRequires:  libjpeg-devel
 BuildRequires:  libXrandr-devel
 BuildRequires:  libXext-devel
 BuildRequires:  libXfixes-devel
+BuildRequires:  libXinerama-devel
 BuildRequires:  openssl-devel
 BuildRequires:  celt051-devel
 BuildRequires:  libcacard-devel >= 0.1.2
@@ -101,6 +107,8 @@ This package provides the client side of the SPICE protocol
 %patch27 -p1
 %patch28 -p1
 
+%patch30 -p1
+%patch31 -p1
 
 %build
 export PYTHONPATH=$(dirname %{SOURCE1})
@@ -131,6 +139,17 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Wed Feb 27 2012 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-7.2
+- added missing BuildRequires: libXinerama-devel
+Related: rhbz#771323
+
+* Wed Feb 15 2012 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-7.1
+- added upstream patches for various zstream RHEL bugs
+  - client: add xinerama support
+Resolves: rhbz#771323
+  - Don't use "hw:0,0" for recording with alsa
+Resolves: rhbz#790892
+
 * Wed Sep 28 2011 Uri Lublin <uril@redhat.com> - 0.8.2-7
 - semi-seamless migration support
 - added pyparsing.py as source, and using it to build the package.
