@@ -1,0 +1,85 @@
+From fd35f8a36aa59596e8e843f9827d11118cf12d00 Mon Sep 17 00:00:00 2001
+From: Uri Lublin <uril@redhat.com>
+Date: Tue, 20 Dec 2011 16:36:13 +0200
+Subject: [PATCH 10/12] client: menu: make RedWindow::set_menu() return an
+ error-code (#758260)
+
+RedWindow::set_menu() can fail (on Windows when in fullscreen mode).
+For Windows spice-client, when in fullscreen mode, the system-menu
+is NULL.
+
+Returns 0 upon success, non-0 (currently only -1) upon failure.
+
+(cherry picked from master commit 24d5852611c3d5be3ba824af64cd5a3356b82b9c)
+(cherry picked from 0.8    commit 67e785f4fc853985ae968b44280c8985651e41ac)
+---
+ client/red_window.h           |    2 +-
+ client/windows/red_window.cpp |   14 +++++++++++---
+ client/x11/red_window.cpp     |    3 ++-
+ 3 files changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/client/red_window.h b/client/red_window.h
+index 632564d..56a90cf 100644
+--- a/client/red_window.h
++++ b/client/red_window.h
+@@ -70,7 +70,7 @@ public:
+     void release_mouse();
+     void start_key_interception();
+     void stop_key_interception();
+-    void set_menu(Menu* menu);
++    int set_menu(Menu* menu);
+ 
+ #ifdef USE_OGL
+     void untouch_context();
+diff --git a/client/windows/red_window.cpp b/client/windows/red_window.cpp
+index 43587e1..188c772 100644
+--- a/client/windows/red_window.cpp
++++ b/client/windows/red_window.cpp
+@@ -1066,18 +1066,26 @@ void RedWindow_p::release_menu(Menu* menu)
+     }
+ }
+ 
+-void RedWindow::set_menu(Menu* menu)
++int RedWindow::set_menu(Menu* menu)
+ {
+     release_menu(_menu);
+     _menu = NULL;
+ 
+     if (!menu) {
+-        return;
++        return 0;
+     }
+-    _menu = menu->ref();
++
+     _sys_menu = GetSystemMenu(_win, FALSE);
++    if (! _sys_menu) {
++        return -1;
++    }
++
++    _menu = menu->ref();
++
+     insert_seperator(_sys_menu);
+     insert_menu(_menu, _sys_menu, _commands_map);
++
++    return 0;
+ }
+ 
+ static LRESULT CALLBACK MessageFilterProc(int nCode, WPARAM wParam, LPARAM lParam)
+diff --git a/client/x11/red_window.cpp b/client/x11/red_window.cpp
+index d53a92f..3f709d0 100644
+--- a/client/x11/red_window.cpp
++++ b/client/x11/red_window.cpp
+@@ -2212,8 +2212,9 @@ void RedWindow::on_pointer_leave()
+     }
+ }
+ 
+-void RedWindow::set_menu(Menu* menu)
++int RedWindow::set_menu(Menu* menu)
+ {
++    return 0;
+ }
+ 
+ void RedWindow::init()
+-- 
+1.7.7.6
+

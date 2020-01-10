@@ -1,0 +1,80 @@
+From eab1524e246c1b0c792568bd4b67b6b248fe23e3 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Wed, 29 Feb 2012 11:48:15 +0100
+Subject: [PATCH 16/19] Fix compilation when smartcard support is disabled
+
+The addition of smartcard control to the controller doesn't handle
+the case when smartcard support is disabled at compile time. When
+this is the case, this causes compile errors.
+---
+ client/application.cpp |    2 ++
+ client/application.h   |    2 ++
+ client/controller.cpp  |    2 ++
+ client/controller.h    |    2 ++
+ 4 files changed, 8 insertions(+), 0 deletions(-)
+
+diff --git a/client/application.cpp b/client/application.cpp
+index f4b4310..cce1d1d 100644
+--- a/client/application.cpp
++++ b/client/application.cpp
+@@ -1670,10 +1670,12 @@ void Application::set_title(const std::string& title)
+     }
+ }
+ 
++#ifdef USE_SMARTCARD
+ void Application::enable_smartcard(bool enable)
+ {
+     _smartcard_options->enable = enable;
+ }
++#endif
+ 
+ bool Application::is_key_set_pressed(const HotkeySet& key_set)
+ {
+diff --git a/client/application.h b/client/application.h
+index a99a68f..692ea32 100644
+--- a/client/application.h
++++ b/client/application.h
+@@ -227,7 +227,9 @@ public:
+     void external_show();
+     void connect();
+     void switch_host(const std::string& host, int port, int sport, const std::string& cert_subject);
++#ifdef USE_SMARTCARD
+     void enable_smartcard(bool enable);
++#endif
+ 
+     const PeerConnectionOptMap& get_con_opt_map() {return _peer_con_opt;}
+     const RedPeer::HostAuthOptions& get_host_auth_opt() { return _host_auth_opt;}
+diff --git a/client/controller.cpp b/client/controller.cpp
+index 4aba827..c8fbfbb 100644
+--- a/client/controller.cpp
++++ b/client/controller.cpp
+@@ -331,10 +331,12 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
+     case CONTROLLER_DELETE_MENU:
+         _handler->delete_menu();
+         break;
++#if USE_SMARTCARD
+ #define CONTROLLER_ENABLE_SMARTCARD 19
+     case CONTROLLER_ENABLE_SMARTCARD:
+         _handler->enable_smartcard(value);
+         break;
++#endif
+     case CONTROLLER_SEND_CAD:
+     default:
+         LOG_ERROR("Ignoring an unknown/SEND_CAD controller message %u", hdr->id);
+diff --git a/client/controller.h b/client/controller.h
+index ef996e9..a59d333 100644
+--- a/client/controller.h
++++ b/client/controller.h
+@@ -50,7 +50,9 @@ public:
+     virtual Menu* get_app_menu() = 0;
+     virtual void set_menu(Menu* menu) = 0;
+     virtual void delete_menu() = 0;
++#ifdef USE_SMARTCARD
+     virtual void enable_smartcard(bool enable) = 0;
++#endif
+ };
+ 
+ class Controller : public NamedPipe::ListenerInterface {
+-- 
+1.7.7.6
+

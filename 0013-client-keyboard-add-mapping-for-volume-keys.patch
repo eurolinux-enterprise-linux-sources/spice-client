@@ -1,0 +1,51 @@
+From 4b468cd45c05c44b6d5c5c6ea2c50e6f955c01ea Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Wed, 29 Feb 2012 16:58:46 +0200
+Subject: [PATCH 1/2] client: keyboard - add mapping for volume keys
+
+Add support for sending volume keys scancodes to the guest
+RHBZ #552539
+
+A good reference for mapping keymaps to scancodes can be found in
+spice-gtk/gtk/keymaps.csv
+
+Signed-off-by: Yonit Halperin <yhalperi@redhat.com>
+(cherry picked from commit 68cdc5488da1a008fa4e8a4447b85aa8ac9c2735)
+---
+ client/inputs_channel.cpp |    3 +++
+ client/red_key.h          |    3 +++
+ 2 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/client/inputs_channel.cpp b/client/inputs_channel.cpp
+index b6f0220..c148eff 100644
+--- a/client/inputs_channel.cpp
++++ b/client/inputs_channel.cpp
+@@ -561,7 +561,10 @@ void InputsChannel::init_scan_table()
+     init_escape_scan_code(REDKEY_ESCAPE_BASE);
+     init_escape_scan_code(REDKEY_PAD_ENTER);
+     init_escape_scan_code(REDKEY_R_CTRL);
++    init_escape_scan_code(REDKEY_MUTE);
+     init_escape_scan_code(REDKEY_FAKE_L_SHIFT);
++    init_escape_scan_code(REDKEY_VOLUME_DOWN);
++    init_escape_scan_code(REDKEY_VOLUME_UP);
+     init_escape_scan_code(REDKEY_PAD_DIVIDE);
+     init_escape_scan_code(REDKEY_FAKE_R_SHIFT);
+     init_escape_scan_code(REDKEY_CTRL_PRINT_SCREEN);
+diff --git a/client/red_key.h b/client/red_key.h
+index ea3396a..3789c9a 100644
+--- a/client/red_key.h
++++ b/client/red_key.h
+@@ -121,7 +121,10 @@ enum RedKey {
+     REDKEY_ESCAPE_BASE = 0x100,
+     REDKEY_PAD_ENTER = REDKEY_ESCAPE_BASE + 0x1c,
+     REDKEY_R_CTRL = REDKEY_ESCAPE_BASE + 0x1d,
++    REDKEY_MUTE = REDKEY_ESCAPE_BASE + 0x20,
+     REDKEY_FAKE_L_SHIFT = REDKEY_ESCAPE_BASE + 0x2a,
++    REDKEY_VOLUME_DOWN = REDKEY_ESCAPE_BASE + 0x2e,
++    REDKEY_VOLUME_UP = REDKEY_ESCAPE_BASE + 0x30,
+     REDKEY_PAD_DIVIDE = REDKEY_ESCAPE_BASE + 0x35,
+     REDKEY_FAKE_R_SHIFT = REDKEY_ESCAPE_BASE + 0x36,
+     REDKEY_CTRL_PRINT_SCREEN = REDKEY_ESCAPE_BASE + 0x37,
+-- 
+1.7.7.6
+

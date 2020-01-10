@@ -1,0 +1,60 @@
+From 6cd084a687a77a15c2637143af8230056789ff34 Mon Sep 17 00:00:00 2001
+From: Uri Lublin <uril@redhat.com>
+Date: Tue, 20 Dec 2011 14:46:50 +0200
+Subject: [PATCH 11/12] client: update menu if needed when exiting full-screen
+ mode (#758260)
+
+(cherry picked from master commit a91b0b3ff712eb2a7d91a951f2af7842495357c3)
+(cherry picked from 0.8    commit 7d8cc134bf0b2175cae69c08bfe07b859d45a306)
+---
+ client/screen.cpp |    7 ++++++-
+ client/screen.h   |    1 +
+ 2 files changed, 7 insertions(+), 1 deletions(-)
+
+diff --git a/client/screen.cpp b/client/screen.cpp
+index e085781..851c74d 100644
+--- a/client/screen.cpp
++++ b/client/screen.cpp
+@@ -97,6 +97,7 @@ RedScreen::RedScreen(Application& owner, int id, const std::string& name, int wi
+     , _mouse_captured (false)
+     , _active_layer_change_event (false)
+     , _pointer_on_screen (false)
++    , _menu_needs_update (false)
+ {
+     region_init(&_dirty_region);
+     set_name(name);
+@@ -781,6 +782,9 @@ void RedScreen::exit_full_screen()
+     _origin.x = _origin.y = 0;
+     _window.set_origin(0, 0);
+     show();
++    if (_menu_needs_update) {
++        update_menu();
++    }
+     _full_screen = false;
+     _out_of_sync = false;
+     _frame_area = false;
+@@ -872,7 +876,8 @@ void RedScreen::external_show()
+ void RedScreen::update_menu()
+ {
+     AutoRef<Menu> menu(_owner.get_app_menu());
+-    _window.set_menu(*menu);
++    int ret = _window.set_menu(*menu);
++    _menu_needs_update = (ret != 0); /* try again if menu update failed */
+ }
+ 
+ void RedScreen::on_exposed_rect(const SpiceRect& area)
+diff --git a/client/screen.h b/client/screen.h
+index e7db4ef..3b28aae 100644
+--- a/client/screen.h
++++ b/client/screen.h
+@@ -178,6 +178,7 @@ private:
+     bool _key_interception;
+     bool _update_by_timer;
+     bool _size_locked;
++    bool _menu_needs_update;
+     int _forec_update_timer;
+     AutoRef<UpdateTimer> _update_timer;
+     RedDrawable* _composit_area;
+-- 
+1.7.7.6
+

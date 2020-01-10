@@ -1,0 +1,61 @@
+From f24d91bc65a4da6dd3e65e291b3cccef1b89f550 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Tue, 4 Oct 2011 15:05:43 +0200
+Subject: [PATCH 30/46] client/x11: reset screen positions in
+ XMonitor::do_restore
+
+XMonitor::do_restore (called for example when going out of
+fullscreen) restore the screen resolution to its previous state,
+but it doesn't take care of repositioning the screen to their
+previous position, which is one of the advantages of using randr
+1.2.
+Since MultyMonScreen::restore handles all of this for us, just call
+it to restore the monitor position/resolutions to their previous
+settings. Before doing any changes, MultyMonScreen::restore checks
+if there's something to do, so calling it once per monitor won't be
+an issue, the resolution/position will only be set the first time.
+
+This has the side-effect of fixing bug #693431. This bug occurs when
+closing the client after the client went in and out of fullscreen.
+MultyMonScreen::~MultyMonScreen calls MultyMonScreen::restore, which
+decides to change the screen positions since they were lost when going
+to fullscreen because XMonitor::restore didn't restore the positions.
+After this change, the positions will be properly restored and
+MultyMonScreen::restore won't be needlessly called upon client
+shutdown.
+---
+ client/x11/platform.cpp |    4 ++--
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/client/x11/platform.cpp b/client/x11/platform.cpp
+index 4ea63dc..da9634b 100644
+--- a/client/x11/platform.cpp
++++ b/client/x11/platform.cpp
+@@ -1171,6 +1171,7 @@ public:
+ 
+     void disable();
+     void enable();
++    void restore();
+ 
+     bool set_monitor_mode(XMonitor& monitor, const XRRModeInfo& mode_info);
+ 
+@@ -1183,7 +1184,6 @@ private:
+ 
+     XMonitor* crtc_overlap_test(int x, int y, int width, int height);
+     void monitors_cleanup();
+-    void restore();
+ 
+ private:
+     int _min_width;
+@@ -2329,7 +2329,7 @@ void XMonitor::do_restore()
+     if (!mode_changed()) {
+         return;
+     }
+-    do_set_mode(_saved_size.x, _saved_size.y);
++    _container.restore();
+ }
+ 
+ int XMonitor::get_depth()
+-- 
+1.7.7.6
+

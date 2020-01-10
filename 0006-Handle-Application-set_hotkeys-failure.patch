@@ -1,0 +1,96 @@
+From 1e875f6d579135185ea468ccd2ff6b85b5582c8e Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Fri, 3 Feb 2012 13:11:11 +0100
+Subject: [PATCH 34/46] Handle Application::set_hotkeys failure
+
+Application::set_hotkeys can throw an exception if it fails parsing
+the string describing the hotkeys to set. Currently this exception
+is uncaught which causes spicec to terminate when the controller
+tries to set invalid hotkeys. Fall back to using the default
+hotkeys when the controller sends an invalid hotkeys string.
+---
+ client/application.cpp |   46 +++++++++++++++++++++++++++++-----------------
+ client/application.h   |    1 +
+ 2 files changed, 30 insertions(+), 17 deletions(-)
+
+diff --git a/client/application.cpp b/client/application.cpp
+index 634fcdd..2e1d058 100644
+--- a/client/application.cpp
++++ b/client/application.cpp
+@@ -388,21 +388,7 @@ Application::Application()
+     Platform::get_app_data_dir(_host_auth_opt.CA_file, app_name);
+     Platform::path_append(_host_auth_opt.CA_file, CA_FILE_NAME);
+ 
+-    std::auto_ptr<HotKeysParser> parser(new HotKeysParser("toggle-fullscreen=shift+f11"
+-                                                          ",release-cursor=shift+f12"
+-#ifdef RED_DEBUG
+-                                                          ",connect=shift+f5"
+-                                                          ",disconnect=shift+f6"
+-#endif
+-#ifdef USE_GUI
+-                                                          ",show-gui=shift+f7"
+-#endif // USE_GUI
+-#ifdef USE_SMARTCARD
+-                                                          ",smartcard-insert=shift+f8"
+-                                                          ",smartcard-remove=shift+f9"
+-#endif
+-                                                          , _commands_map));
+-    _hot_keys = parser->get();
++    this->set_default_hotkeys();
+ 
+     _sticky_info.trace_is_on = false;
+     _sticky_info.sticky_mode = false;
+@@ -1862,10 +1848,36 @@ void Application::hide_me()
+     hide();
+ }
+ 
++void Application::set_default_hotkeys(void)
++{
++    const std::string default_hotkeys = "toggle-fullscreen=shift+f11"
++                                        ",release-cursor=shift+f12"
++#ifdef RED_DEBUG
++                                        ",connect=shift+f5"
++                                        ",disconnect=shift+f6"
++#endif
++#ifdef USE_GUI
++                                        ",show-gui=shift+f7"
++#endif // USE_GUI
++#ifdef USE_SMARTCARD
++                                        ",smartcard-insert=shift+f8"
++                                        ",smartcard-remove=shift+f9"
++#endif
++                                        "";
++
++    this->set_hotkeys(default_hotkeys);
++}
++
+ void Application::set_hotkeys(const std::string& hotkeys)
+ {
+-    std::auto_ptr<HotKeysParser> parser(new HotKeysParser(hotkeys, _commands_map));
+-    _hot_keys = parser->get();
++
++    try {
++        std::auto_ptr<HotKeysParser> parser(new HotKeysParser(hotkeys, _commands_map));
++        _hot_keys = parser->get();
++    } catch (Exception &e) {
++        LOG_WARN("%s", e.what());
++        this->set_default_hotkeys();
++    }
+ }
+ 
+ int Application::get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id)
+diff --git a/client/application.h b/client/application.h
+index c70c7fa..b8ce811 100644
+--- a/client/application.h
++++ b/client/application.h
+@@ -250,6 +250,7 @@ public:
+     void show_me(bool full_screen);
+     void hide_me();
+     void set_hotkeys(const std::string& hotkeys);
++    void set_default_hotkeys(void);
+     int get_controller_menu_item_id(int32_t opaque_conn_ref, uint32_t msg_id);
+     void set_menu(Menu* menu);
+     void delete_menu();
+-- 
+1.7.7.6
+

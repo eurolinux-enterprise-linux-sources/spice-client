@@ -1,0 +1,38 @@
+From 824a1224778fb2e95378ceb5a72e65fe9a726470 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Tue, 4 Oct 2011 13:52:22 +0200
+Subject: [PATCH 31/46] client/x11: fix mode setting in
+ MultyMonScreen::restore
+
+MultyMonScreen::restore changes the X11 Screen resolution, but it
+doesn't use MultyMonScreen::set_size. This means
+MultyMonScreen::_width and MultyMonScreen::_height don't get
+updated to reflect the new resolution settings, which could cause
+issues later on. Until now this was safe since the only caller of
+MultyMonScreen::restore was MultyMonScreen destructor.
+---
+ client/x11/platform.cpp |    8 +-------
+ 1 files changed, 1 insertions(+), 7 deletions(-)
+
+diff --git a/client/x11/platform.cpp b/client/x11/platform.cpp
+index da9634b..91c24e3 100644
+--- a/client/x11/platform.cpp
++++ b/client/x11/platform.cpp
+@@ -1447,13 +1447,7 @@ void MultyMonScreen::restore()
+     X_DEBUG_SYNC(get_display());
+     XMonitor::inc_change_ref();
+     disable();
+-    Window root_window = RootWindow(get_display(), get_screen());
+-
+-    XLockDisplay(get_display());
+-    XRRSetScreenSize(get_display(), root_window, _saved_width,
+-                     _saved_height,
+-                     _saved_width_mm, _saved_height_mm);
+-    XUnlockDisplay(get_display());
++    set_size(_saved_width, _saved_height);
+     XMonitorsList::iterator iter = _monitors.begin();
+     for (; iter != _monitors.end(); iter++) {
+         (*iter)->revert();
+-- 
+1.7.7.6
+

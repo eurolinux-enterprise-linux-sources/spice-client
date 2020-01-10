@@ -1,0 +1,72 @@
+From cd8069d1c53e10506356b30a3f74df8fdd42930a Mon Sep 17 00:00:00 2001
+From: Uri Lublin <uril@redhat.com>
+Date: Tue, 13 Dec 2011 17:09:58 +0200
+Subject: [PATCH 12/12] client: foreign-menu: pass "active" param when
+ creating a ForeignMenu (#769020)
+
+The default stays the same -- false.
+
+A race could prevent setting ForeignMenu::_active correctly.
+That happened when Application::on_app_activated was called before
+_foriegn_menu was created. When foriegn_menu was created its
+_active defaults to false, and that has not changed, until focus
+was taken out and back in spice-client window.
+
+This caused usbrdr to sometimes not auto-share devices, unless
+the user switched focus to a different application and back to
+spicec.
+
+The fix updates ForiegnMenu::_active upon creation.
+(cherry picked from master commit fdcef173645e564be71f1b73d476c0716e91663d)
+(cherry picked from 0.8    commit df17a852fa23ab2bb47038313eda78f6614dd7f0)
+---
+ client/application.cpp  |    2 +-
+ client/foreign_menu.cpp |    4 ++--
+ client/foreign_menu.h   |    2 +-
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/client/application.cpp b/client/application.cpp
+index 2e1d058..03023ec 100644
+--- a/client/application.cpp
++++ b/client/application.cpp
+@@ -580,7 +580,7 @@ int Application::run()
+ 
+ void Application::on_start_running()
+ {
+-    _foreign_menu.reset(new ForeignMenu(this));
++    _foreign_menu.reset(new ForeignMenu(this, _active));
+     if (_enable_controller) {
+         _controller.reset(new Controller(this));
+         return;
+diff --git a/client/foreign_menu.cpp b/client/foreign_menu.cpp
+index 988583a..ebe2d5c 100644
+--- a/client/foreign_menu.cpp
++++ b/client/foreign_menu.cpp
+@@ -33,9 +33,9 @@
+ #define PIPE_NAME "/tmp/SpiceForeignMenu-%lu.uds"
+ #endif
+ 
+-ForeignMenu::ForeignMenu(ForeignMenuInterface *handler)
++ForeignMenu::ForeignMenu(ForeignMenuInterface *handler, bool active)
+     : _handler (handler)
+-    , _active (false)
++    , _active (active)
+     , _refs (1)
+ {
+     char pipe_name[PIPE_NAME_MAX_LEN];
+diff --git a/client/foreign_menu.h b/client/foreign_menu.h
+index 2fc4e53..6138087 100644
+--- a/client/foreign_menu.h
++++ b/client/foreign_menu.h
+@@ -38,7 +38,7 @@ public:
+ 
+ class ForeignMenu : public NamedPipe::ListenerInterface {
+ public:
+-    ForeignMenu(ForeignMenuInterface *handler);
++    ForeignMenu(ForeignMenuInterface *handler, bool active = false);
+     virtual ~ForeignMenu();
+ 
+     ForeignMenu* ref() { _refs++; return this;}
+-- 
+1.7.7.6
+

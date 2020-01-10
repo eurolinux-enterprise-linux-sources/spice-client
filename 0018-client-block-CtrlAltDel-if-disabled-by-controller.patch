@@ -1,0 +1,37 @@
+From fcc0b4a74eb8c4b8711f97488618d1590ea6b73d Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Fri, 2 Mar 2012 16:15:15 +0100
+Subject: [PATCH 18/19] client: block CtrlAltDel if disabled by controller
+
+If the controller disabled CtrlAltDel, detect it in
+Application::on_key_down and prevent its propagation.
+
+Fixes rhbz #750856
+---
+ client/application.cpp |   10 ++++++++++
+ 1 files changed, 10 insertions(+), 0 deletions(-)
+
+diff --git a/client/application.cpp b/client/application.cpp
+index ffca0e6..0cdba33 100644
+--- a/client/application.cpp
++++ b/client/application.cpp
+@@ -1242,6 +1242,16 @@ void Application::on_key_down(RedKey key)
+     }
+ #endif
+ 
++    if (_disable_ctrlaltdel) {
++        if ((_keyboard_state[REDKEY_L_CTRL] || _keyboard_state[REDKEY_R_CTRL]) &&
++            (_sticky_info.sticky_mode || _keyboard_state[REDKEY_L_ALT] || _keyboard_state[REDKEY_R_ALT])) {
++                if (key == REDKEY_DELETE || key == REDKEY_PAD_POINT) {
++                    unpress_key(key);
++                    return;
++                }
++        }
++    }
++
+     _key_handler->on_key_down(key);
+ }
+ 
+-- 
+1.7.7.6
+

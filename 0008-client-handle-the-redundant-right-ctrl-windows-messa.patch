@@ -1,0 +1,76 @@
+From 1cb70dd1963b0bebf026981c6c3d063fb8fb19c2 Mon Sep 17 00:00:00 2001
+From: Gal Hammer <ghammer@redhat.com>
+Date: Mon, 14 Nov 2011 12:51:39 +0200
+Subject: [PATCH 08/12] client: handle the redundant right ctrl windows'
+ message send when a alt-gr is pressed bz#709074
+
+Hello,
+
+The second patch check to see if Windows is sending a fake VK_CONTROL
+message when the user pressed Alt-Gr when using a non-US keyboard layout
+(German, Czech, etc...).
+
+If the function is_fake_ctrl return true and key event is translated to
+a REDKEY_INVALID and the event is discarded.
+
+     Gal.
+(cherry picked from commit 9ffa2e9990dc5d5ae61c227d10d5234753c08402)
+---
+ client/windows/red_window.cpp |   34 ++++++++++++++++++++++++++++++++++
+ 1 files changed, 34 insertions(+), 0 deletions(-)
+
+diff --git a/client/windows/red_window.cpp b/client/windows/red_window.cpp
+index 94bab52..43587e1 100644
+--- a/client/windows/red_window.cpp
++++ b/client/windows/red_window.cpp
+@@ -49,6 +49,33 @@ static inline int to_red_mouse_state(WPARAM wParam)
+            ((wParam & MK_RBUTTON) ? SPICE_MOUSE_BUTTON_MASK_RIGHT : 0);
+ }
+ 
++// Return true if VK_RCONTROL is followed by a VK_RMENU with the same timestamp.
++static bool is_fake_ctrl(UINT message, WPARAM wParam, LPARAM lParam)
++{
++    if ((wParam == VK_CONTROL) && ((HIWORD (lParam) & KF_EXTENDED) == 0)) {
++        UINT next_peek;
++        if (message == WM_KEYDOWN) {
++            next_peek = WM_KEYDOWN;
++        } else if (message == WM_SYSKEYUP) {
++            next_peek = WM_KEYUP;
++        } else {
++            next_peek = WM_NULL;
++        }
++        if (next_peek != WM_NULL) {
++            MSG next_msg;
++            LONG time = GetMessageTime();
++            BOOL msg_exist = PeekMessage(&next_msg, NULL,
++                next_peek, next_peek, PM_NOREMOVE);
++            if ((msg_exist == TRUE) && (next_msg.time == time) &&
++                (next_msg.wParam == VK_MENU) &&
++                (HIWORD (next_msg.lParam) & KF_EXTENDED)) {
++                    return true;
++            }
++        }
++    }
++    return false;
++}
++
+ static inline RedKey translate_key(UINT message, WPARAM wParam, LPARAM lParam)
+ {
+     uint32_t scan = HIWORD(lParam) & 0xff;
+@@ -73,6 +100,13 @@ static inline RedKey translate_key(UINT message, WPARAM wParam, LPARAM lParam)
+             return REDKEY_KOREAN_HANGUL;
+         }
+         break;
++    case VK_CONTROL:
++        // Ignore the fake right ctrl message which is send when alt-gr is
++        // pressed when using a non-US keyboard layout.
++        if (is_fake_ctrl(message, wParam, lParam)) {
++            return REDKEY_INVALID;
++        }
++        break;
+     default:
+         break;
+     }
+-- 
+1.7.7.6
+

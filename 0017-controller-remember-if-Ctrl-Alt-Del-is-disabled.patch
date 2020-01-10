@@ -1,0 +1,84 @@
+From aa680e1b7aab00a900583b1ab3a268030061c698 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Fri, 2 Mar 2012 16:02:31 +0100
+Subject: [PATCH 17/19] controller: remember if Ctrl+Alt+Del is disabled
+
+---
+ client/application.cpp |    6 ++++++
+ client/application.h   |    2 ++
+ client/controller.cpp  |    2 ++
+ client/controller.h    |    1 +
+ 4 files changed, 11 insertions(+), 0 deletions(-)
+
+diff --git a/client/application.cpp b/client/application.cpp
+index cce1d1d..ffca0e6 100644
+--- a/client/application.cpp
++++ b/client/application.cpp
+@@ -359,6 +359,7 @@ Application::Application()
+ #ifdef USE_SMARTCARD
+     , _smartcard_options(new SmartcardOptions())
+ #endif
++    , _disable_ctrlaltdel(false)
+ {
+     DBG(0, "");
+ 
+@@ -1677,6 +1678,11 @@ void Application::enable_smartcard(bool enable)
+ }
+ #endif
+ 
++void Application::enable_ctrlaltdel(bool enable)
++{
++    _disable_ctrlaltdel = !enable;
++}
++
+ bool Application::is_key_set_pressed(const HotkeySet& key_set)
+ {
+     HotkeySet::const_iterator iter = key_set.begin();
+diff --git a/client/application.h b/client/application.h
+index 692ea32..a5f362a 100644
+--- a/client/application.h
++++ b/client/application.h
+@@ -230,6 +230,7 @@ public:
+ #ifdef USE_SMARTCARD
+     void enable_smartcard(bool enable);
+ #endif
++    void enable_ctrlaltdel(bool enable);
+ 
+     const PeerConnectionOptMap& get_con_opt_map() {return _peer_con_opt;}
+     const RedPeer::HostAuthOptions& get_host_auth_opt() { return _host_auth_opt;}
+@@ -408,6 +409,7 @@ private:
+ #ifdef USE_SMARTCARD
+     SmartcardOptions* _smartcard_options;
+ #endif
++    bool _disable_ctrlaltdel;
+ };
+ 
+ #endif
+diff --git a/client/controller.cpp b/client/controller.cpp
+index 2c1d9a5..392a1ff 100644
+--- a/client/controller.cpp
++++ b/client/controller.cpp
+@@ -337,6 +337,8 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
+         break;
+ #endif
+     case CONTROLLER_SEND_CAD:
++        _handler->enable_ctrlaltdel(value);
++        break;
+     default:
+         LOG_ERROR("Ignoring an unknown/SEND_CAD controller message %u", hdr->id);
+         return false;
+diff --git a/client/controller.h b/client/controller.h
+index a59d333..22a5739 100644
+--- a/client/controller.h
++++ b/client/controller.h
+@@ -53,6 +53,7 @@ public:
+ #ifdef USE_SMARTCARD
+     virtual void enable_smartcard(bool enable) = 0;
+ #endif
++    virtual void enable_ctrlaltdel(bool enable) = 0;
+ };
+ 
+ class Controller : public NamedPipe::ListenerInterface {
+-- 
+1.7.7.6
+

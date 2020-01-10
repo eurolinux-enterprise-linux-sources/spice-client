@@ -1,0 +1,50 @@
+From 9b00b9f5f040b708350dc1529e02ab0bf1d6d2aa Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marc-Andr=C3=A9=20Lureau?= <marcandre.lureau@redhat.com>
+Date: Mon, 5 Mar 2012 22:39:24 +0100
+Subject: [PATCH spice] Use SPICE_FOREIGN_MENU_SOCKET if it's available
+
+If specified, use SPICE_FOREIGN_MENU_SOCKET environment variable over
+snprintf(pipe_name, PIPE_NAME_MAX_LEN, PIPE_NAME,
+Platform::get_process_id()); since it's impossible to guess the client
+pid when spice-xpi launches the client as a grand-child (via script
+etc).
+---
+ client/controller.cpp   |    2 +-
+ client/foreign_menu.cpp |    8 +++++++-
+ 2 files changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/client/controller.cpp b/client/controller.cpp
+index e0b7fe7..514bf68 100644
+--- a/client/controller.cpp
++++ b/client/controller.cpp
+@@ -44,7 +44,7 @@ Controller::Controller(ControllerInterface *handler)
+ #ifdef WIN32
+     snprintf(pipe_name, PIPE_NAME_MAX_LEN, PIPE_NAME, Platform::get_process_id());
+ #else
+-    char *p_socket = getenv("SPICE_XPI_SOCKET");
++    const char *p_socket = getenv("SPICE_XPI_SOCKET");
+     if (!p_socket) {
+         LOG_ERROR("Failed to get a controller connection (SPICE_XPI_SOCKET)");
+         throw Exception("Failed to get a controller connection (SPICE_XPI_SOCKET)");
+diff --git a/client/foreign_menu.cpp b/client/foreign_menu.cpp
+index faef4c2..1010bfb 100644
+--- a/client/foreign_menu.cpp
++++ b/client/foreign_menu.cpp
+@@ -44,7 +44,13 @@ ForeignMenu::ForeignMenu(ForeignMenuInterface *handler, bool active)
+     char pipe_name[PIPE_NAME_MAX_LEN];
+ 
+     ASSERT(_handler != NULL);
+-    snprintf(pipe_name, PIPE_NAME_MAX_LEN, PIPE_NAME, Platform::get_process_id());
++#ifndef WIN32
++    const char *p_socket = getenv("SPICE_FOREIGN_MENU_SOCKET");
++    if (p_socket)
++        strncpy(pipe_name, p_socket, sizeof(pipe_name));
++    else
++#endif
++        snprintf(pipe_name, PIPE_NAME_MAX_LEN, PIPE_NAME, Platform::get_process_id());
+     LOG_INFO("Creating a foreign menu connection %s", pipe_name);
+     _foreign_menu = NamedPipe::create(pipe_name, *this);
+     if (!_foreign_menu) {
+-- 
+1.7.7.6
+

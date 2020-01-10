@@ -1,0 +1,41 @@
+From d82ac68c5ac4dcfb831fe3bd9eefcd65e05f6ce0 Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Wed, 29 Feb 2012 17:02:28 +0200
+Subject: [PATCH 2/2] client X11: support volume keys when evdev is in use
+
+Add support for sending volume keys scancodes to the guest
+RHBZ #552539
+
+Signed-off-by: Yonit Halperin <yhalperi@redhat.com>
+(cherry picked from commit d2cd7b2b020da1dc7efe778ddfc4525e31784dbb)
+---
+ client/x11/red_window.cpp |    6 ++++++
+ 1 files changed, 6 insertions(+), 0 deletions(-)
+
+diff --git a/client/x11/red_window.cpp b/client/x11/red_window.cpp
+index b16249e..fda90d5 100644
+--- a/client/x11/red_window.cpp
++++ b/client/x11/red_window.cpp
+@@ -186,6 +186,9 @@ enum EvdevKeyCode {
+     EVDEV_KEYCODE_PAGE_DOWN,
+     EVDEV_KEYCODE_INSERT,
+     EVDEV_KEYCODE_DELETE,
++    EVDEV_KEYCODE_MUTE = 121,
++    EVDEV_KEYCODE_VOLUME_DOWN = 122,
++    EVDEV_KEYCODE_VOLUME_UP = 123,
+     EVDEV_KEYCODE_PAUSE = 127,
+     EVDEV_KEYCODE_HANGUL = 130,
+     EVDEV_KEYCODE_HANGUL_HANJA,
+@@ -456,6 +459,9 @@ static void init_evdev_map()
+ {
+     #define KEYMAP(key_code, red_key)  keycode_map[EVDEV_##key_code] = red_key
+     INIT_MAP;
++    KEYMAP(KEYCODE_MUTE, REDKEY_MUTE);
++    KEYMAP(KEYCODE_VOLUME_DOWN, REDKEY_VOLUME_DOWN);
++    KEYMAP(KEYCODE_VOLUME_UP, REDKEY_VOLUME_UP);
+     #undef KEYMAP
+ }
+ 
+-- 
+1.7.7.6
+

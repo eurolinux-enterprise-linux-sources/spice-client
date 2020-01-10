@@ -1,0 +1,26 @@
+From a201e754500d94db03d9e5a5f19d437479e9877f Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Fri, 2 Mar 2012 17:15:38 +0100
+Subject: [PATCH 19/19] win32: don't unconditionnally block ctrl+alt+del
+
+---
+ client/application.cpp |    3 ---
+ 1 files changed, 0 insertions(+), 3 deletions(-)
+
+diff --git a/client/application.cpp b/client/application.cpp
+index 0cdba33..819af19 100644
+--- a/client/application.cpp
++++ b/client/application.cpp
+@@ -1235,9 +1235,6 @@ void Application::on_key_down(RedKey key)
+             unpress_key(key);
+             _key_handler->on_key_down(REDKEY_DELETE);
+             _key_handler->on_key_up(REDKEY_DELETE);
+-        } else if (key == REDKEY_DELETE || key == REDKEY_PAD_POINT) {
+-            unpress_key(key);
+-            return;
+         }
+     }
+ #endif
+-- 
+1.7.7.6
+

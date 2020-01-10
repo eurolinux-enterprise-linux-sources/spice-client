@@ -1,0 +1,75 @@
+From 9b8197b011ed62cc25d1cf240aa3d3c80b2ecbf4 Mon Sep 17 00:00:00 2001
+From: Alon Levy <alevy@redhat.com>
+Date: Sun, 26 Feb 2012 12:45:28 +0100
+Subject: [PATCH 15/19] client: handle CONTROLLER_ENABLE_SMARTCARD (rhbz
+ 641828)
+
+---
+ client/application.cpp |    5 +++++
+ client/application.h   |    1 +
+ client/controller.cpp  |    6 +++++-
+ client/controller.h    |    1 +
+ 4 files changed, 12 insertions(+), 1 deletions(-)
+
+diff --git a/client/application.cpp b/client/application.cpp
+index 03023ec..f4b4310 100644
+--- a/client/application.cpp
++++ b/client/application.cpp
+@@ -1670,6 +1670,11 @@ void Application::set_title(const std::string& title)
+     }
+ }
+ 
++void Application::enable_smartcard(bool enable)
++{
++    _smartcard_options->enable = enable;
++}
++
+ bool Application::is_key_set_pressed(const HotkeySet& key_set)
+ {
+     HotkeySet::const_iterator iter = key_set.begin();
+diff --git a/client/application.h b/client/application.h
+index b8ce811..a99a68f 100644
+--- a/client/application.h
++++ b/client/application.h
+@@ -227,6 +227,7 @@ public:
+     void external_show();
+     void connect();
+     void switch_host(const std::string& host, int port, int sport, const std::string& cert_subject);
++    void enable_smartcard(bool enable);
+ 
+     const PeerConnectionOptMap& get_con_opt_map() {return _peer_con_opt;}
+     const RedPeer::HostAuthOptions& get_host_auth_opt() { return _host_auth_opt;}
+diff --git a/client/controller.cpp b/client/controller.cpp
+index 3fed47f..4aba827 100644
+--- a/client/controller.cpp
++++ b/client/controller.cpp
+@@ -331,9 +331,13 @@ bool ControllerConnection::handle_message(ControllerMsg *hdr)
+     case CONTROLLER_DELETE_MENU:
+         _handler->delete_menu();
+         break;
++#define CONTROLLER_ENABLE_SMARTCARD 19
++    case CONTROLLER_ENABLE_SMARTCARD:
++        _handler->enable_smartcard(value);
++        break;
+     case CONTROLLER_SEND_CAD:
+     default:
+-        LOG_ERROR("Ignoring an unknown controller message %u", hdr->id);
++        LOG_ERROR("Ignoring an unknown/SEND_CAD controller message %u", hdr->id);
+         return false;
+     }
+     return true;
+diff --git a/client/controller.h b/client/controller.h
+index bf92707..ef996e9 100644
+--- a/client/controller.h
++++ b/client/controller.h
+@@ -50,6 +50,7 @@ public:
+     virtual Menu* get_app_menu() = 0;
+     virtual void set_menu(Menu* menu) = 0;
+     virtual void delete_menu() = 0;
++    virtual void enable_smartcard(bool enable) = 0;
+ };
+ 
+ class Controller : public NamedPipe::ListenerInterface {
+-- 
+1.7.7.6
+

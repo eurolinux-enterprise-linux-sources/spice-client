@@ -1,0 +1,44 @@
+From 324d871cb76b96c08007366cb5cbef4b7f1f8dc0 Mon Sep 17 00:00:00 2001
+From: Uri Lublin <uril@redhat.com>
+Date: Tue, 6 Dec 2011 15:36:38 +0200
+Subject: [PATCH 09/12] client controller/foreign_menu: use memmove instead of
+ memcpy in readers
+
+When src/dst memory areas may overlap, it's safer to use memmove.
+
+(cherry picked from master commit 5d28d1662e6e415367bb283d051e0a690a8ec2f2)
+(cherry picked from 0.8    commit baa375e8b51de94ee44466fe416202c29ea43e23)
+---
+ client/controller.cpp   |    2 +-
+ client/foreign_menu.cpp |    2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/client/controller.cpp b/client/controller.cpp
+index 42abe20..3fed47f 100644
+--- a/client/controller.cpp
++++ b/client/controller.cpp
+@@ -213,7 +213,7 @@ bool ControllerConnection::read_msgs()
+         pos += hdr->size;
+     }
+     if (nread > 0 && pos != _read_buf) {
+-        memcpy(_read_buf, pos, nread);
++        memmove(_read_buf, pos, nread);
+     }
+     _read_pos = _read_buf + nread;
+     return true;
+diff --git a/client/foreign_menu.cpp b/client/foreign_menu.cpp
+index e5d7459..988583a 100644
+--- a/client/foreign_menu.cpp
++++ b/client/foreign_menu.cpp
+@@ -234,7 +234,7 @@ bool ForeignMenuConnection::read_msgs()
+         pos += hdr->size;
+     }
+     if (nread > 0 && pos != _read_buf) {
+-        memcpy(_read_buf, pos, nread);
++        memmove(_read_buf, pos, nread);
+     }
+     _read_pos = _read_buf + nread;
+     return true;
+-- 
+1.7.7.6
+

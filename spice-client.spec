@@ -1,12 +1,13 @@
 Name:           spice-client
 Version:        0.8.2
-Release:        7%{?dist}.2
+Release:        15%{?dist}
 Summary:        Implements the client side of the SPICE protocol
 Group:          User Interface/Desktops
 License:        LGPLv2+
 URL:            http://www.spice-space.org/
 Source0:        http://www.spice-space.org/download/releases/spice-%{version}.tar.bz2
 Source1:        pyparsing.py
+Source2:        spice-xpi-client-spicec
 
 Patch1:  0001-client-fix-30s-timeout-regression.patch
 Patch2:  0001-client-red_client-fix-broken-switch-host-migration-R.patch
@@ -39,11 +40,37 @@ Patch26:         seamless-0021-client-display-channel-destroy-all-surfaces-on-di
 Patch27:         seamless-0022-client-support-semi-seamless-migration-between-spice.patch
 Patch28:         seamless-0023-Release-0.8.3.patch
 
-#bug 771323
+#bug 695323
 Patch30:         0001-client-add-xinerama-support.patch
-#bug 790892
-Patch31:         0005-Don-t-use-hw-0-0-for-recording-with-alsa.patch
-
+#bug 693431
+Patch31:         0002-client-x11-reset-screen-positions-in-XMonitor-do_res.patch
+Patch32:         0003-client-x11-fix-mode-setting-in-MultyMonScreen-restor.patch
+Patch33:         0004-client-windows-fix-typo-make-error-messages-unique.patch
+#bug 711810
+Patch34:         0005-Don-t-use-hw-0-0-for-recording-with-alsa.patch
+#bug 750030
+Patch35:         0006-Handle-Application-set_hotkeys-failure.patch
+#bug 791274
+Patch36:         0007-client-handle-the-redundant-right-ctrl-windows-messa.patch
+Patch37:         0008-client-handle-the-redundant-right-ctrl-windows-messa.patch
+Patch38:         0009-client-controller-foreign_menu-use-memmove-instead-o.patch
+#bug 791271
+Patch39:         0010-client-menu-make-RedWindow-set_menu-return-an-error-.patch
+Patch40:         0011-client-update-menu-if-needed-when-exiting-full-scree.patch
+#bug 791269
+Patch41:         0012-client-foreign-menu-pass-active-param-when-creating-.patch
+#bug 552539
+Patch42:         0013-client-keyboard-add-mapping-for-volume-keys.patch
+Patch43:         0014-client-X11-support-volume-keys-when-evdev-is-in-use.patch
+#bug 641828
+Patch44:         0015-client-handle-CONTROLLER_ENABLE_SMARTCARD-rhbz-64182.patch
+Patch45:         0016-Fix-compilation-when-smartcard-support-is-disabled.patch
+#bug 750856
+Patch46:         0017-controller-remember-if-Ctrl-Alt-Del-is-disabled.patch
+Patch47:         0018-client-block-CtrlAltDel-if-disabled-by-controller.patch
+Patch48:         0019-win32-don-t-unconditionnally-block-ctrl-alt-del.patch
+Patch49:         0001-Use-SPICE_FOREIGN_MENU_SOCKET-if-it-s-available.patch
+Patch50:         0021-Don-t-limit-spice-controller-socket-name-to-50-chars.patch
 
 BuildRoot:      %{_tmppath}/%{tarname}-%{version}-%{release}-root-%(%{__id_u} -n)
 ExclusiveArch:  i686 x86_64
@@ -64,6 +91,8 @@ BuildRequires:  celt051-devel
 BuildRequires:  libcacard-devel >= 0.1.2
 BuildRequires:  spice-protocol >= 0.8.1-2
 Requires:       pixman >= 0.18
+Requires(post):   %{_sbindir}/update-alternatives
+Requires(postun): %{_sbindir}/update-alternatives
 
 %description
 The Simple Protocol for Independent Computing Environments (SPICE) is
@@ -109,6 +138,25 @@ This package provides the client side of the SPICE protocol
 
 %patch30 -p1
 %patch31 -p1
+%patch32 -p1
+%patch33 -p1
+%patch34 -p1
+%patch35 -p1
+%patch36 -p1
+%patch37 -p1
+%patch38 -p1
+%patch39 -p1
+%patch40 -p1
+%patch41 -p1
+%patch42 -p1
+%patch43 -p1
+%patch44 -p1
+%patch45 -p1
+%patch46 -p1
+%patch47 -p1
+%patch48 -p1
+%patch49 -p1
+%patch50 -p1
 
 %build
 export PYTHONPATH=$(dirname %{SOURCE1})
@@ -125,6 +173,9 @@ make -C client install DESTDIR=$RPM_BUILD_ROOT
 # create libexec 0.4 compat link
 mkdir -p $RPM_BUILD_ROOT%{_libexecdir}
 ln -s %{_bindir}/spicec $RPM_BUILD_ROOT%{_libexecdir}/spicec
+mkdir -p $RPM_BUILD_ROOT%{_libexecdir}
+touch $RPM_BUILD_ROOT%{_libexecdir}/spice-xpi-client
+install -m 0755 %{_sourcedir}/spice-xpi-client-spicec $RPM_BUILD_ROOT%{_libexecdir}/
 
 
 %clean
@@ -136,19 +187,65 @@ rm -rf $RPM_BUILD_ROOT
 %doc COPYING NEWS README
 %{_bindir}/spicec
 %{_libexecdir}/spicec
+%ghost %{_libexecdir}/spice-xpi-client
+%{_libexecdir}/spice-xpi-client-spicec
 
+%post
+%{_sbindir}/update-alternatives --install %{_libexecdir}/spice-xpi-client \
+  spice-xpi-client %{_libexecdir}/spice-xpi-client-spicec 21
+
+%postun
+if [ $1 -eq 0 ] ; then
+  %{_sbindir}/update-alternatives --remove spice-xpi-client %{_libexecdir}/spice-xpi-client-spicec
+fi
 
 %changelog
-* Wed Feb 27 2012 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-7.2
-- added missing BuildRequires: libXinerama-devel
-Related: rhbz#771323
+* Thu Mar 22 2012 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-15
+- Actually apply the patch added to -14... Thanks to rpmdiff :)
+Related: rhbz#804561
 
-* Wed Feb 15 2012 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-7.1
-- added upstream patches for various zstream RHEL bugs
+* Wed Mar 21 2012 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-14
+- Don't hardcode a limit for SPICE_XPI_SOCKET length
+Resolves: rhbz#804561
+
+* Mon Mar 05 2012 Marc-André Lureau <marcandre.lureau@redhat.com> - 0.8.2-13
+- Use foreign menu specified by environment.
+Resolves: rhbz#796848
+
+* Mon Mar 05 2012 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-12
+- handle ENABLE_SMARTCARD messages from the controller
+  Resolves: rhbz#641828
+- handle SEND_CAD messages from the controller
+  Resolves: rhbz#750856
+
+* Thu Mar 1 2012 Yonit Halperin <yhalperi@redhat.com> - 0.8.2-11
+- send volume keys to the guest
+Resolves: rhbz#552539
+
+* Fri Feb 24 2012 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-10
+- sync RHEV (windows client) patches which are upstream
+  - fix USB sharing when starting SPICE fullscreen (windows client only)
+Resolves: rhbz#791269
+  - fix menu issues when USB sharing is enabled (windows client only)
+Resolves: rhbz#791271
+  - fix issues with AltGr when keyboard layout is non-us (windows client
+    only)
+Resolves: rhbz#791274
+
+* Thu Feb 23 2012 Marc-Andre Lureau <marcandre.lureau@redhat.com> - 0.8.2-9
+- Provides a spice-xpi-client alternative script
+Resolves: rhbz#796848
+
+* Wed Feb 15 2012 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-8
+- added upstream patches for various RHEL bugs
   - client: add xinerama support
-Resolves: rhbz#771323
+Resolves: rhbz#695323
+  - client/x11: fix mode setting in MultyMonScreen::restore
+Resolves: rhbz#693431
   - Don't use "hw:0,0" for recording with alsa
-Resolves: rhbz#790892
+Resolves: rhbz#711810
+  - Handle Application::set_hotkeys failure
+Resolves: rhbz#750030
 
 * Wed Sep 28 2011 Uri Lublin <uril@redhat.com> - 0.8.2-7
 - semi-seamless migration support
