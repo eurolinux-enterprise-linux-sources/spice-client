@@ -1,6 +1,6 @@
 Name:           spice-client
 Version:        0.8.0
-Release:        2%{?dist}
+Release:        2%{?dist}.1
 Summary:        Implements the client side of the SPICE protocol
 Group:          User Interface/Desktops
 License:        LGPLv2+
@@ -24,20 +24,6 @@ BuildRequires:  celt051-devel
 BuildRequires:  libcacard-devel >= 0.1.2
 BuildRequires:  spice-protocol >= 0.7.0
 Requires:       pixman >= 0.18
-
-# Obsolete old packages that are not needed anymore
-Obsoletes: cairo-spice < 1.8.7.2
-Obsoletes: cairo-spice-devel < 1.8.7.2
-Obsoletes: cairo-spice-debuginfo < 1.8.7.2
-Obsoletes: ffmpeg-spice < 0.4.9-1
-Obsoletes: ffmpeg-spice-devel < 0.4.9-1
-Obsoletes: ffmpeg-spice-libs < 0.4.9-1
-Obsoletes: ffmpeg-spice-debuginfo < 0.4.9-1
-Obsoletes: pixman-spice < 0.13.3-6
-Obsoletes: pixman-spice-devel < 0.13.3-6
-Obsoletes: pixman-spice-debuginfo < 0.13.3-6
-Obsoletes: spice-common < 0.4.2-8
-Obsoletes: spice-common-devel < 0.4.2-8
 
 
 %description
@@ -80,6 +66,10 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
+* Thu Sep 15 2011 Uri Lublin <uril@redhat.com> - 0.8.0-2.1
+- Remove Obsolete lines from spec
+Resolves: rhbz#725103
+
 * Fri Mar 11 2011 Hans de Goede <hdegoede@redhat.com> - 0.8.0-2
 - Fix being unable to send ctrl+alt+key when release mouse is bound to
   ctrl+alt (which can happen when used from RHEV-M)
