@@ -1,0 +1,157 @@
+From 59e55605cc0e0cef924a57a14325c3ca9fe2e110 Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Sun, 18 Sep 2011 15:17:33 +0300
+Subject: [PATCH 15/23] client: RedPeer::HostAuthOptions::set_cert_subject
+
+---
+ client/application.cpp |   57 ++++++------------------------------------------
+ client/red_peer.cpp    |   51 ++++++++++++++++++++++++++++++++++++++++++
+ client/red_peer.h      |    2 +-
+ 3 files changed, 59 insertions(+), 51 deletions(-)
+
+diff --git a/client/application.cpp b/client/application.cpp
+index b3a73bd..634fcdd 100644
+--- a/client/application.cpp
++++ b/client/application.cpp
+@@ -2015,56 +2015,13 @@ bool Application::set_ca_file(const char* ca_file, const char* arg0)
+
+ bool Application::set_host_cert_subject(const char* subject, const char* arg0)
+ {
+-    std::string subject_str(subject);
+-    std::string::const_iterator iter = subject_str.begin();
+-    std::string entry;
+-    _host_auth_opt.type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_SUBJECT;
+-    _host_auth_opt.host_subject.clear();
+-
+-    while (true) {
+-        if ((iter == subject_str.end()) || (*iter == ',')) {
+-            RedPeer::HostAuthOptions::CertFieldValuePair entry_pair;
+-            int value_pos = entry.find_first_of('=');
+-            if ((value_pos == std::string::npos) || (value_pos == (entry.length() - 1))) {
+-                Platform::term_printf("%s: host_subject bad format: assignment for %s is missing\n",
+-                                      arg0, entry.c_str());
+-                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+-                return false;
+-            }
+-            size_t start_pos = entry.find_first_not_of(' ');
+-            if ((start_pos == std::string::npos) || (start_pos == value_pos)) {
+-                Platform::term_printf("%s: host_subject bad format: first part of assignment must be non empty in %s\n",
+-                                      arg0, entry.c_str());
+-                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+-                return false;
+-            }
+-            entry_pair.first = entry.substr(start_pos, value_pos - start_pos);
+-            entry_pair.second = entry.substr(value_pos + 1);
+-            _host_auth_opt.host_subject.push_back(entry_pair);
+-            DBG(0, "subject entry: %s=%s", entry_pair.first.c_str(), entry_pair.second.c_str());
+-            if (iter == subject_str.end()) {
+-                break;
+-            }
+-            entry.clear();
+-        } else if (*iter == '\\') {
+-            iter++;
+-            if (iter == subject_str.end()) {
+-                LOG_WARN("single \\ in host subject");
+-                entry.append(1, '\\');
+-                continue;
+-            } else if ((*iter == '\\') || (*iter == ',')) {
+-                entry.append(1, *iter);
+-            } else {
+-                LOG_WARN("single \\ in host subject");
+-                entry.append(1, '\\');
+-                continue;
+-            }
+-        } else {
+-            entry.append(1, *iter);
+-        }
+-        iter++;
+-    }
+-    return true;
++     if (!_host_auth_opt.set_cert_subject(subject)) {
++        Platform::term_printf("%s: bad cert subject %s", arg0, subject);
++        _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
++        return false;
++     }
++
++     return true;
+ }
+
+ bool Application::set_canvas_option(CmdLineParser& parser, char *val, const char* arg0)
+diff --git a/client/red_peer.cpp b/client/red_peer.cpp
+index 61120b9..0965ac3 100644
+--- a/client/red_peer.cpp
++++ b/client/red_peer.cpp
+@@ -39,6 +39,57 @@ static void ssl_error()
+     THROW_ERR(SPICEC_ERROR_CODE_SSL_ERROR, "SSL Error:", ERR_error_string(last_error, NULL));
+ }
+
++bool RedPeer::HostAuthOptions::set_cert_subject(const char* subject)
++{
++    std::string subject_str(subject);
++    std::string::const_iterator iter = subject_str.begin();
++    std::string entry;
++    this->type_flags = RedPeer::HostAuthOptions::HOST_AUTH_OP_SUBJECT;
++    this->host_subject.clear();
++
++    while (true) {
++        if ((iter == subject_str.end()) || (*iter == ',')) {
++            RedPeer::HostAuthOptions::CertFieldValuePair entry_pair;
++            int value_pos = entry.find_first_of('=');
++            if ((value_pos == std::string::npos) || (value_pos == (entry.length() - 1))) {
++                LOG_ERROR("host_subject bad format: assignment for %s is missing\n", entry.c_str());
++                return false;
++            }
++            size_t start_pos = entry.find_first_not_of(' ');
++            if ((start_pos == std::string::npos) || (start_pos == value_pos)) {
++                LOG_ERROR("host_subject bad format: first part of assignment"
++                         " must be non empty in %s\n", entry.c_str());
++                return false;
++            }
++            entry_pair.first = entry.substr(start_pos, value_pos - start_pos);
++            entry_pair.second = entry.substr(value_pos + 1);
++            this->host_subject.push_back(entry_pair);
++            DBG(0, "subject entry: %s=%s", entry_pair.first.c_str(), entry_pair.second.c_str());
++            if (iter == subject_str.end()) {
++                break;
++            }
++            entry.clear();
++        } else if (*iter == '\\') {
++            iter++;
++            if (iter == subject_str.end()) {
++                LOG_WARN("single \\ in host subject");
++                entry.append(1, '\\');
++                continue;
++            } else if ((*iter == '\\') || (*iter == ',')) {
++                entry.append(1, *iter);
++            } else {
++                LOG_WARN("single \\ in host subject");
++                entry.append(1, '\\');
++                continue;
++            }
++        } else {
++            entry.append(1, *iter);
++        }
++        iter++;
++    }
++    return true;
++}
++
+ RedPeer::RedPeer()
+     : _peer (INVALID_SOCKET)
+     , _shut (false)
+diff --git a/client/red_peer.h b/client/red_peer.h
+index 53fd3c9..c260935 100644
+--- a/client/red_peer.h
++++ b/client/red_peer.h
+@@ -52,7 +52,7 @@ public:
+         typedef std::list<CertFieldValuePair> CertFieldValueList;
+
+         HostAuthOptions() : type_flags(0) {}
+-
++        bool set_cert_subject(const char* subject);
+     public:
+
+         int type_flags;
+-- 
+1.7.6.2
+

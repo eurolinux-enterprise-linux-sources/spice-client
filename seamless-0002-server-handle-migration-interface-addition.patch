@@ -1,0 +1,92 @@
+From 3ac0075cdac8fa42de47a7882022795e96cb1fee Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Sun, 18 Sep 2011 09:10:24 +0300
+Subject: [PATCH 02/23] server: handle migration interface addition
+
+---
+ server/reds.c |   29 +++++++++++++++++++++++++++++
+ server/reds.h |    4 ++++
+ 2 files changed, 33 insertions(+), 0 deletions(-)
+
+diff --git a/server/reds.c b/server/reds.c
+index 9a983f8..99d52f9 100644
+--- a/server/reds.c
++++ b/server/reds.c
+@@ -73,6 +73,7 @@ static SpiceKbdInstance *keyboard = NULL;
+ static SpiceMouseInstance *mouse = NULL;
+ static SpiceTabletInstance *tablet = NULL;
+ static SpiceCharDeviceInstance *vdagent = NULL;
++static SpiceMigrateInstance *migration_interface = NULL;
+
+ #define MIGRATION_NOTIFY_SPICE_KEY "spice_mig_ext"
+
+@@ -4345,6 +4346,20 @@ SPICE_GNUC_VISIBLE int spice_server_add_interface(SpiceServer *s,
+         red_printf("unsupported net wire interface");
+         return -1;
+ #endif
++    } else if (strcmp(interface->type, SPICE_INTERFACE_MIGRATION) == 0) {
++        red_printf("SPICE_INTERFACE_MIGRATION");
++        if (migration_interface) {
++            red_printf("already have migration");
++            return -1;
++        }
++
++        if (interface->major_version != SPICE_INTERFACE_MIGRATION_MAJOR ||
++            interface->minor_version > SPICE_INTERFACE_MIGRATION_MINOR) {
++            red_printf("unsupported migration interface");
++            return -1;
++        }
++        migration_interface = SPICE_CONTAINEROF(sin, SpiceMigrateInstance, base);
++        migration_interface->st = spice_new0(SpiceMigrateState, 1);
+     }
+
+     return 0;
+@@ -4859,7 +4874,15 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char*
+                                                     int port, int secure_port,
+                                                     const char* cert_subject)
+ {
++    SpiceMigrateInterface *sif;
++    red_printf("");
++    ASSERT(migration_interface);
++    ASSERT(reds == s);
++
+     red_printf("not implemented yet");
++    sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
++    sif->migrate_connect_complete(migration_interface);
++
+     return 0;
+ }
+
+@@ -4920,8 +4943,14 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_client_state(SpiceServer *s)
+
+ SPICE_GNUC_VISIBLE int spice_server_migrate_end(SpiceServer *s, int completed)
+ {
++    SpiceMigrateInterface *sif;
++    ASSERT(migration_interface);
+     ASSERT(reds == s);
+     reds_mig_finished(completed);
++    sif = SPICE_CONTAINEROF(migration_interface->base.sif, SpiceMigrateInterface, base);
++    if (sif->migrate_end_complete) {
++        sif->migrate_end_complete(migration_interface);
++    }
+     return 0;
+ }
+
+diff --git a/server/reds.h b/server/reds.h
+index 463c94f..b60681a 100644
+--- a/server/reds.h
++++ b/server/reds.h
+@@ -119,6 +119,10 @@ struct SpiceNetWireState {
+     struct TunnelWorker *worker;
+ };
+
++struct SpiceMigrateState {
++    int dummy;
++};
++
+ void reds_channel_dispose(Channel *channel);
+
+ ssize_t reds_stream_read(RedsStream *s, void *buf, size_t nbyte);
+-- 
+1.7.6.2
+

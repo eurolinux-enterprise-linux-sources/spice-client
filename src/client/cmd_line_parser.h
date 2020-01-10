@@ -25,7 +25,7 @@ public:
         OPTION_ERROR = -1,
         OPTION_DONE = 0,
         OPTION_HELP = 256,
-        OPTION_FIRST_AVILABLE,
+        OPTION_FIRST_AVAILABLE,
     };
 
     CmdLineParser(std::string description, bool allow_positional_args);
@@ -35,9 +35,9 @@ public:
              char short_name = 0);
 
     void add(int id, const std::string& name, const std::string& help,
-             const std::string& arg_name, bool reqired_arg, char short_name = 0);
+             const std::string& arg_name, bool required_arg, char short_name = 0);
     void set_multi(int id, char seperator);
-    void set_reqired(int id);
+    void set_required(int id);
 
     void begin(int argc, char** argv);
     int get_option(char** val);

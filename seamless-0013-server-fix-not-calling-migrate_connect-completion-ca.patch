@@ -1,0 +1,54 @@
+From f29dc9b6201f4a575ebb1f2ea61775ab46f4ad1f Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Mon, 26 Sep 2011 10:16:51 +0300
+Subject: [PATCH 13/23] server: fix not calling migrate_connect completion
+ callback
+
+When the server is a migration target and spice_server_migrate_connect
+is called before SPICE_MSGC_MIGRATE_END has been received, we start
+the mig_timer. We handle the migrate_connect only when receiving SPICE_MSGC_MIGRATE_END.
+If the mig_timer expires before that, we dismiss the request, and should call the
+migrate_connect completion callback. Since reds->mig_inprogress
+wasn't set appropriately, it wasn't called.
+---
+ server/reds.c |   18 ++++++++----------
+ 1 files changed, 8 insertions(+), 10 deletions(-)
+
+diff --git a/server/reds.c b/server/reds.c
+index 10d2ffc..8e83b99 100644
+--- a/server/reds.c
++++ b/server/reds.c
+@@ -4205,22 +4205,20 @@ static void reds_mig_started(void)
+
+     reds->expect_migrate = TRUE;
+     if (reds->client_semi_mig_cap) {
++        reds->mig_inprogress = TRUE;
+         if (reds->mig_target) {
+             red_printf("previous spice migration hasn't completed yet. Waiting for client");
+             reds->mig_wait_prev_complete = TRUE;
+             core->timer_start(reds->mig_timer, MIGRATE_TIMEOUT);
+-            return;
++        } else {
++            reds_mig_connect();
+         }
+-    } else if (sif) {
+-        // switch host msg will be sent after migration completes
+-        sif->migrate_connect_complete(migration_interface);
+-        return;
++    } else {
++        if (sif) {
++            // switch host msg will be sent after migration completes
++            sif->migrate_connect_complete(migration_interface);
++         }
+     }
+-
+-    reds->mig_inprogress = TRUE;
+-
+-    reds_mig_connect();
+-    return;
+ }
+
+ static void reds_mig_finished(int completed)
+-- 
+1.7.6.2
+

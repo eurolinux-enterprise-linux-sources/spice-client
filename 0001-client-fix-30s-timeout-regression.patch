@@ -1,0 +1,54 @@
+From 0c8438c7ffffed9c581d529997423bc736159970 Mon Sep 17 00:00:00 2001
+From: Christophe Fergeau <cfergeau@redhat.com>
+Date: Fri, 29 Jul 2011 17:31:01 +0200
+Subject: [PATCH] client: fix 30s timeout regression
+
+Changelog from Arnon Gilboa, patch from me:
+
+Commit eb6f55409412 caused the following regression:
+
+When client runs without the auto-conf or disable-effects options
+(either from CLI or controller), which is the case when using Spice
+from Admin Portal, the client will unecessarily wait for 30sec before
+connecting to a Windows guest with an agent running (this won't happen
+with linux guests or without an agent running).
+
+The mentioned patch assumed that on_agent_reply() of
+VD_AGENT_DISPLAY_CONFIG will call send_main_attach_channels() and
+connect. However, when auto-conf or disable-effects are not used,
+on_agent_reply() will ignore the reply and not call
+send_main_attach_channels(). Therefore, send_main_attach_channels()
+will only be called on agent timeout.
+
+The solution is to activate agent timer only if auto-conf or
+disable-effects. Otherwise, simply call send_main_attach_channels().
+
+Fixes rhbz #726441
+---
+ client/red_client.cpp |    9 +++++++--
+ 1 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/client/red_client.cpp b/client/red_client.cpp
+index 6ba834e..330c6b5 100644
+--- a/client/red_client.cpp
++++ b/client/red_client.cpp
+@@ -968,9 +968,14 @@ void RedClient::handle_init(RedPeer::InMessage* message)
+         post_message(msg);
+         send_agent_announce_capabilities(true);
+         if (_auto_display_res) {
+-           send_agent_monitors_config();
++            send_agent_monitors_config();
++        }
++
++        if (_auto_display_res || !_display_setting.is_empty()) {
++            _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
++        } else {
++            send_main_attach_channels();
+         }
+-        _application.activate_interval_timer(*_agent_timer, AGENT_TIMEOUT);
+     } else {
+         if (_auto_display_res || !_display_setting.is_empty()) {
+             LOG_WARN("no agent running, display options have been ignored");
+-- 
+1.7.6
+

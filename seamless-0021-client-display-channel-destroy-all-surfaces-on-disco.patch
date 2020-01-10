@@ -1,0 +1,77 @@
+From 010b22cd771b7e81363b4b6521e4265b093fcd25 Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Mon, 19 Sep 2011 09:19:40 +0300
+Subject: [PATCH 21/23] client: display channel - destroy all surfaces on
+ disconnect
+
+Fix not destroying surfaces and other data (e.g., streams) upon disconnection.
+---
+ client/display_channel.cpp |   18 ++++++++++++------
+ client/display_channel.h   |    1 +
+ 2 files changed, 13 insertions(+), 6 deletions(-)
+
+diff --git a/client/display_channel.cpp b/client/display_channel.cpp
+index e6b1af5..3f449a5 100644
+--- a/client/display_channel.cpp
++++ b/client/display_channel.cpp
+@@ -1042,9 +1042,7 @@ void DisplayChannel::on_disconnect()
+         _surfaces_cache[0]->clear();
+     }
+
+-    if (screen()) {
+-        screen()->set_update_interrupt_trigger(NULL);
+-    }
++    clear();
+
+     AutoRef<DetachChannelsEvent> detach_channels(new DetachChannelsEvent(*this));
+     get_client().push_event(*detach_channels);
+@@ -1053,7 +1051,6 @@ void DisplayChannel::on_disconnect()
+         get_client().push_event(*unlock_event);
+         detach_from_screen(get_client().get_application());
+     }
+-    get_client().deactivate_interval_timer(*_streams_timer);
+     AutoRef<SyncEvent> sync_event(new SyncEvent());
+     get_client().push_event(*sync_event);
+     (*sync_event)->wait();
+@@ -1109,7 +1106,7 @@ void DisplayChannel::destroy_off_screen_surfaces()
+     }
+ }
+
+-void DisplayChannel::on_disconnect_mig_src()
++void DisplayChannel::clear(bool destroy_primary)
+ {
+     _palette_cache.clear();
+     destroy_streams();
+@@ -1119,7 +1116,16 @@ void DisplayChannel::on_disconnect_mig_src()
+     _update_mark = 0;
+     _next_timer_time = 0;
+     get_client().deactivate_interval_timer(*_streams_timer);
+-    destroy_off_screen_surfaces();
++    if (destroy_primary) {
++        destroy_all_surfaces();
++    } else {
++        destroy_off_screen_surfaces();
++    }
++}
++
++void DisplayChannel::on_disconnect_mig_src()
++{
++    clear(false);
+     // Not clrearing the primary surface till we receive a new one (or a timeout).
+     if (_surfaces_cache.exist(0)) {
+         AutoRef<MigPrimarySurfaceTimer> mig_timer(new MigPrimarySurfaceTimer());
+diff --git a/client/display_channel.h b/client/display_channel.h
+index 10e1731..4b3a660 100644
+--- a/client/display_channel.h
++++ b/client/display_channel.h
+@@ -179,6 +179,7 @@ private:
+     void activate_streams_timer();
+     void stream_update_request(uint32_t update_time);
+     void reset_screen();
++    void clear(bool destroy_primary = true);
+
+     static void set_clip_rects(const SpiceClip& clip, uint32_t& num_clip_rects, SpiceRect*& clip_rects);
+
+-- 
+1.7.6.2
+

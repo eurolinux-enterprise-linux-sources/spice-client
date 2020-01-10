@@ -1,16 +1,50 @@
 Name:           spice-client
-Version:        0.8.0
-Release:        2%{?dist}.1
+Version:        0.8.2
+Release:        7%{?dist}
 Summary:        Implements the client side of the SPICE protocol
 Group:          User Interface/Desktops
 License:        LGPLv2+
 URL:            http://www.spice-space.org/
 Source0:        http://www.spice-space.org/download/releases/spice-%{version}.tar.bz2
-# rhbz: 675767
-Patch0:         0001-client-Don-t-handle-hotkeys-while-sticky-alt-is-acti.patch
+Source1:        pyparsing.py
+
+Patch1:  0001-client-fix-30s-timeout-regression.patch
+Patch2:  0001-client-red_client-fix-broken-switch-host-migration-R.patch
+Patch3:  0001-client-setting-monitors-resolution-728252.patch
+Patch4:  0001-fix-bug-692833.patch
+Patch5:  0002-client-don-t-crash-when-booting-a-Xinerama-setup.patch
+
+#semi-seamless migration support
+Patch6:         seamless-0001-server-spice.h-semi-seamless-migration-interface-RHB.patch
+Patch7:         seamless-0002-server-handle-migration-interface-addition.patch
+Patch8:         seamless-0003-configure-spice-protocol-0.8.2-semi-seamless-migrati.patch
+Patch9:         seamless-0004-server-proto-tell-the-client-to-connect-to-the-migra.patch
+Patch10:         seamless-0005-spice.proto-add-SPICE_MSG_MAIN_MIGRATE_END-SPICE_MSG.patch
+Patch11:         seamless-0006-server-send-SPICE_MSG_MAIN_MIGRATE_END-on-spice_serv.patch
+Patch12:         seamless-0007-server-move-SPICE_MSG_MAIN_INIT-sending-code-to-a-se.patch
+Patch13:         seamless-0008-server-move-the-linking-of-channels-to-a-separate-ro.patch
+Patch14:         seamless-0009-server-handling-semi-seamless-migration-in-the-targe.patch
+Patch15:         seamless-0010-server-call-migrate_connect_complete-callback-when-n.patch
+Patch16:         seamless-0011-server-turn-spice_server_migrate_start-into-a-valid-.patch
+Patch17:         seamless-0012-server-fall-back-to-switch-host-scheme-in-case-semi-.patch
+Patch18:         seamless-0013-server-fix-not-calling-migrate_connect-completion-ca.patch
+Patch19:         seamless-0014-client-rewrite-surfaces-cache.patch
+Patch20:         seamless-0015-client-RedPeer-HostAuthOptions-set_cert_subject.patch
+Patch21:         seamless-0016-client-handle-SpiceMsgMainMigrationBegin-for-0.8.2.patch
+Patch22:         seamless-0017-client-handle-SPICE_MSG_MAIN_MIGRATE_END.patch
+Patch23:         seamless-0018-client-main-channel-migration-do-partial-cleanup-whe.patch
+Patch24:         seamless-0019-client-playback-record-channels-implement-on_disconn.patch
+Patch25:         seamless-0020-client-display-channel-migration.patch
+Patch26:         seamless-0021-client-display-channel-destroy-all-surfaces-on-disco.patch
+Patch27:         seamless-0022-client-support-semi-seamless-migration-between-spice.patch
+Patch28:         seamless-0023-Release-0.8.3.patch
+
+
 BuildRoot:      %{_tmppath}/%{tarname}-%{version}-%{release}-root-%(%{__id_u} -n)
 ExclusiveArch:  i686 x86_64
 
+
+BuildRequires:  autoconf automake libtool
 BuildRequires:  gcc-c++
 BuildRequires:  pkgconfig
 BuildRequires:  alsa-lib-devel
@@ -22,9 +56,8 @@ BuildRequires:  libXfixes-devel
 BuildRequires:  openssl-devel
 BuildRequires:  celt051-devel
 BuildRequires:  libcacard-devel >= 0.1.2
-BuildRequires:  spice-protocol >= 0.7.0
+BuildRequires:  spice-protocol >= 0.8.1-2
 Requires:       pixman >= 0.18
-
 
 %description
 The Simple Protocol for Independent Computing Environments (SPICE) is
@@ -38,11 +71,43 @@ This package provides the client side of the SPICE protocol
 
 %prep
 %setup -q -n spice-%{version}
-%patch0 -p1
+%patch1 -p1
+%patch2 -p1
+%patch3 -p1
+%patch4 -p1
+%patch5 -p1
+
+%patch6 -p1
+%patch7 -p1
+%patch8 -p1
+%patch9 -p1
+%patch10 -p1
+%patch11 -p1
+%patch12 -p1
+%patch13 -p1
+%patch14 -p1
+%patch15 -p1
+%patch16 -p1
+%patch17 -p1
+%patch18 -p1
+%patch19 -p1
+%patch20 -p1
+%patch21 -p1
+%patch22 -p1
+%patch23 -p1
+%patch24 -p1
+%patch25 -p1
+%patch26 -p1
+%patch27 -p1
+%patch28 -p1
 
 
 %build
-%configure --enable-smartcard
+export PYTHONPATH=$(dirname %{SOURCE1})
+
+autoreconf -f -i
+
+%configure --enable-smartcard --without-sasl
 make -C client %{?_smp_mflags}
 
 
@@ -66,9 +131,47 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Thu Sep 15 2011 Uri Lublin <uril@redhat.com> - 0.8.0-2.1
+* Wed Sep 28 2011 Uri Lublin <uril@redhat.com> - 0.8.2-7
+- semi-seamless migration support
+- added pyparsing.py as source, and using it to build the package.
+- added BuildRequires: autoconf automake libtool and using them.
+- applied server patches too
+- requires spice-protocol-0.8.1-2 (equivalent to upstream 0.8.2)
+- advertise itself as version 0.8.3, to notify the new feature.
+Resolves: rhbz#725009
+
+* Tue Sep 20 2011 Christophe Fergeau <cfergeau@redhat.com> - 0.8.2-6
+- add upstream patch for bug #692833
+Resolves: rhbz#692833
+- add upstream patch for bug #732423 client: don't crash when booting a
+  Xinerama setup
+Resolves: rhbz#732433
+- removed old patch from CVS (it was already removed from spec)
+
+* Sun Aug 28 2011 Yonit Halperin <yhalperi@redhat.com> - 0.8.2-5
+- used upstream patch instead of 0.8 patch (Alon)
+Resolves: rhbz#728252
+
+* Sun Aug 28 2011 Yonit Halperin <yhalperi@redhat.com> - 0.8.2-4
+- client: setting monitors resolution before resizing screens
+Resolves: rhbz#728252
+
+* Thu Aug 04 2011 Alon Levy <alevy@redhat.com - 0.8.2-3
+- client: fix switch-host regression.
+Resolves: rhbz#727969
+
+* Mon Aug 01 2011 Uri Lublin <uril@redhat.com> - 0.8.2-2
+- client: fix 30s timeout regression (autoconf/effects)
+Resolves: rhbz#726441
+
+* Fri Jul 22 2011 Uri Lublin <uril@redhat.com> - 0.8.2-1
+- Rebase to upstream spice-0.8.2, including:
+  + Bug fixes (RHBZ): 712938, 710461, 673973, 667689, 692976, 712941
+Resolves: rhbz#723687
+
+* Fri Jul 22 2011 Uri Lublin <uril@redhat.com> - 0.8.0-3
 - Remove Obsolete lines from spec
-Resolves: rhbz#725103
+Resolves: rhbz#707122
 
 * Fri Mar 11 2011 Hans de Goede <hdegoede@redhat.com> - 0.8.0-2
 - Fix being unable to send ctrl+alt+key when release mouse is bound to

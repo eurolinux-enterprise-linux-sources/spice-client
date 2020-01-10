@@ -92,7 +92,7 @@ void spice_marshall_msg_notify(SpiceMarshaller *m, SpiceMsgNotify *msg)
     /* Don't marshall @nomarshal message */
 }
 
-SPICE_GNUC_UNUSED static void spice_marshall_array_uint8(SpiceMarshaller *m, uint8_t *ptr, unsigned count)
+SPICE_GNUC_UNUSED static void spice_marshall_array_uint8(SpiceMarshaller *m, uint8_t *ptr, int count)
 {
     SPICE_GNUC_UNUSED SpiceMarshaller *m2;
     uint32_t i;
@@ -1523,7 +1523,7 @@ void spice_marshall_Path(SpiceMarshaller *m, SpicePath *ptr)
     }
 }
 
-SPICE_GNUC_UNUSED static void spice_marshall_array_int32(SpiceMarshaller *m, int32_t *ptr, unsigned count)
+SPICE_GNUC_UNUSED static void spice_marshall_array_int32(SpiceMarshaller *m, int32_t *ptr, int count)
 {
     SPICE_GNUC_UNUSED SpiceMarshaller *m2;
     uint32_t i;

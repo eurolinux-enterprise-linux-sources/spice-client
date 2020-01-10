@@ -1,0 +1,37 @@
+From b8213167717979e6f2fb52646e43eb458634e6a1 Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Sun, 18 Sep 2011 14:23:36 +0300
+Subject: [PATCH 11/23] server: turn spice_server_migrate_start into a valid
+ call
+
+We will add a qemu call to spice_server_migrate_start when migration starts.
+For now, it does nothing, but we may need this notification in the future.
+---
+ server/reds.c |    8 +-------
+ 1 files changed, 1 insertions(+), 7 deletions(-)
+
+diff --git a/server/reds.c b/server/reds.c
+index e61751d..8ee002f 100644
+--- a/server/reds.c
++++ b/server/reds.c
+@@ -5142,16 +5142,10 @@ SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* des
+ SPICE_GNUC_VISIBLE int spice_server_migrate_start(SpiceServer *s)
+ {
+     ASSERT(reds == s);
+-
+-    if (1) {
+-        /* seamless doesn't work, fixing needs protocol change. */
+-        return -1;
+-    }
+-
++    red_printf("");
+     if (!reds->mig_spice) {
+         return -1;
+     }
+-    reds_mig_started();
+     return 0;
+ }
+
+-- 
+1.7.6.2
+

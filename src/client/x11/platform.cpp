@@ -180,6 +180,18 @@ public:
 static DefaultClipboardListener default_clipboard_listener;
 static Platform::ClipboardListener* clipboard_listener = &default_clipboard_listener;
 
+static void handle_x_errors_start(void)
+{
+    handle_x_error = True;
+    x_error_code = 0;
+}
+
+static int handle_x_errors_stop(void)
+{
+    handle_x_error = False;
+    return x_error_code;
+}
+
 static const char *atom_name(Atom atom)
 {
     const char *name;
@@ -188,7 +200,11 @@ static const char *atom_name(Atom atom)
         return "None";
 
     XLockDisplay(x_display);
+    handle_x_errors_start();
     name = XGetAtomName(x_display, atom);
+    if (handle_x_errors_stop()) {
+        name = "Bad Atom";
+    }
     XUnlockDisplay(x_display);
 
     return name;
@@ -315,18 +331,6 @@ void XEventHandler::on_event()
 Display* XPlatform::get_display()
 {
     return x_display;
-}
-
-static void handle_x_errors_start(void)
-{
-    handle_x_error = True;
-    x_error_code = 0;
-}
-
-static int handle_x_errors_stop(void)
-{
-    handle_x_error = False;
-    return x_error_code;
 }
 
 bool XPlatform::is_x_shm_avail()
@@ -2568,8 +2572,12 @@ static int get_selection(XEvent &event, Atom type, Atom prop, int format,
         }
         len = clipboard_data_size;
         *data_ret = clipboard_data;
-    } else
-        *data_ret = data;
+    } else {
+        if (len > 0)
+            *data_ret = data;
+        else
+            *data_ret = NULL;
+    }
 
     if (len > 0)
         ret_val = len;
@@ -2672,7 +2680,9 @@ static void handle_selection_notify(XEvent& event, bool incr)
 
     if (clipboard_request_target == None)
         LOG_INFO("SelectionNotify received without a target");
-    else if (!incr && event.xselection.target != clipboard_request_target)
+    else if (!incr &&
+             event.xselection.target != clipboard_request_target &&
+             event.xselection.target != incr_atom)
         LOG_WARN("Requested %s target got %s",
                  atom_name(clipboard_request_target),
                  atom_name(event.xselection.target));
@@ -2872,7 +2882,7 @@ static void cleanup(void)
         for (i = 0; i < ScreenCount(x_display); ++i) {
             XFree(vinfo[i]);
         }
-        delete vinfo;
+        delete[] vinfo;
         vinfo = NULL;
     }
 #ifdef USE_OGL

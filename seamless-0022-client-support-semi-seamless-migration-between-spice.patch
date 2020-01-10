@@ -1,0 +1,163 @@
+From 4b2bf4d88c253502003aa5e4b93a045742eec9b4 Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Tue, 20 Sep 2011 14:59:36 +0300
+Subject: [PATCH 22/23] client: support semi-seamless migration between spice
+ servers with different protocols.
+
+It can't actually happen right now, since switch-host migration scheme will take
+place if the src/target server has protocol 1.
+---
+ client/red_channel.cpp |   20 ++++++++++++++++++++
+ client/red_channel.h   |    2 ++
+ client/red_client.cpp  |   21 ++++++++++++++++-----
+ client/red_client.h    |    3 ++-
+ 4 files changed, 40 insertions(+), 6 deletions(-)
+
+diff --git a/client/red_channel.cpp b/client/red_channel.cpp
+index 939c13b..ba057a9 100644
+--- a/client/red_channel.cpp
++++ b/client/red_channel.cpp
+@@ -295,6 +295,20 @@ bool RedChannelBase::test_capability(uint32_t cap)
+     return test_capability(_remote_caps, cap);
+ }
+
++void RedChannelBase::swap(RedChannelBase* other)
++{
++    int tmp_ver;
++
++    RedPeer::swap(other);
++    tmp_ver = _remote_major;
++    _remote_major = other->_remote_major;
++    other->_remote_major = tmp_ver;
++
++    tmp_ver = _remote_minor;
++    _remote_minor = other->_remote_minor;
++    other->_remote_minor = tmp_ver;
++}
++
+ SendTrigger::SendTrigger(RedChannel& channel)
+     : _channel (channel)
+ {
+@@ -490,6 +504,12 @@ void RedChannel::do_migration_disconnect_src()
+ void RedChannel::do_migration_connect_target()
+ {
+     LOG_INFO("");
++    ASSERT(get_client().get_protocol() != 0);
++    if (get_client().get_protocol() == 1) {
++        _marshallers = spice_message_marshallers_get1();
++    } else {
++        _marshallers = spice_message_marshallers_get();
++    }
+     _loop.add_socket(*this);
+     _socket_in_loop = true;
+     on_connect_mig_target();
+diff --git a/client/red_channel.h b/client/red_channel.h
+index c47d143..0eedc4d 100644
+--- a/client/red_channel.h
++++ b/client/red_channel.h
+@@ -66,6 +66,8 @@ public:
+      uint32_t get_peer_major() { return _remote_major;}
+      uint32_t get_peer_minor() { return _remote_minor;}
+
++     virtual void swap(RedChannelBase* other);
++
+ protected:
+     void set_common_capability(uint32_t cap);
+     void set_capability(uint32_t cap);
+diff --git a/client/red_client.cpp b/client/red_client.cpp
+index 3dde7b2..8bf2fe2 100644
+--- a/client/red_client.cpp
++++ b/client/red_client.cpp
+@@ -133,6 +133,7 @@ Migrate::Migrate(RedClient& client)
+     , _connected (false)
+     , _thread (NULL)
+     , _pending_con (0)
++    , _protocol (0)
+ {
+ }
+
+@@ -189,7 +190,7 @@ void Migrate::swap_peer(RedChannelBase& other)
+                 curr->set_valid(false);
+                 if (!--_pending_con) {
+                     lock.unlock();
+-                    _client.set_target(_host.c_str(), _port, _sport);
++                    _client.set_target(_host.c_str(), _port, _sport, _protocol);
+                     abort();
+                 }
+                 return;
+@@ -212,6 +213,13 @@ void Migrate::connect_one(MigChannel& channel, const RedPeer::ConnectionOptions&
+     channel.connect(options, connection_id, _host.c_str(), _password);
+     ++_pending_con;
+     channel.set_valid(true);
++    if (_protocol == 0) {
++        if (channel.get_peer_major() == 1) {
++            _protocol = 1;
++        } else {
++            _protocol = 2;
++        }
++    }
+ }
+
+ void Migrate::run()
+@@ -232,7 +240,7 @@ void Migrate::run()
+         for (++iter; iter != _channels.end(); ++iter) {
+             conn_type = _client.get_connection_options((*iter)->get_type());
+             con_opt = RedPeer::ConnectionOptions(conn_type, _port, _sport,
+-						 _client.get_protocol(),
++                                                 _protocol,
+                                                  _auth_options, _con_ciphers);
+             connect_one(**iter, con_opt, connection_id);
+         }
+@@ -440,11 +448,16 @@ RedClient::~RedClient()
+     delete[] _agent_caps;
+ }
+
+-void RedClient::set_target(const std::string& host, int port, int sport)
++void RedClient::set_target(const std::string& host, int port, int sport, int protocol)
+ {
++    if (protocol != get_protocol()) {
++        LOG_INFO("old protocol %d, new protocol %d", get_protocol(), protocol);
++    }
++
+     _port = port;
+     _sport = sport;
+     _host.assign(host);
++    set_protocol(protocol);
+ }
+
+ void RedClient::push_event(Event* event)
+@@ -679,10 +692,8 @@ void RedClient::on_channel_disconnect_mig_src_completed(RedChannel& channel)
+         _pixmap_cache.clear();
+         _glz_window.clear();
+         memset(_sync_info, 0, sizeof(_sync_info));
+-
+         LOG_INFO("calling main to connect and wait for handle_init to tell all the other channels to connect");
+         RedChannel::connect_migration_target();
+-
+         AutoRef<MigrateEndEvent> mig_end_event(new MigrateEndEvent());
+         get_process_loop().push_event(*mig_end_event);
+     }
+diff --git a/client/red_client.h b/client/red_client.h
+index f47f1cb..b059f32 100644
+--- a/client/red_client.h
++++ b/client/red_client.h
+@@ -82,6 +82,7 @@ private:
+     Mutex _lock;
+     Condition _cond;
+     int _pending_con;
++    int _protocol;
+ };
+
+ class ChannelFactory {
+@@ -238,7 +239,7 @@ public:
+     void activate_interval_timer(Timer* timer, unsigned int millisec);
+     void deactivate_interval_timer(Timer* timer);
+
+-    void set_target(const std::string& host, int port, int sport);
++    void set_target(const std::string& host, int port, int sport, int protocol = 0);
+     void set_password(const std::string& password) { _password = password;}
+     void set_auto_display_res(bool auto_display_res) { _auto_display_res = auto_display_res;}
+     void set_display_setting(DisplaySetting& setting) { _display_setting = setting;}
+-- 
+1.7.6.2
+

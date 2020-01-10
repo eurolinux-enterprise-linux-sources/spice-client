@@ -45,6 +45,7 @@
 #endif
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 #ifdef USE_SMARTCARD
@@ -664,25 +665,9 @@ RedScreen* Application::get_screen(int id)
 
         if (id != 0) {
             if (_full_screen) {
-                bool capture;
-
                 mon = get_monitor(id);
-                capture = release_capture();
                 screen->set_monitor(mon);
-                prepare_monitors();
-                position_screens();
-                screen->show_full_screen();
-                if (screen->is_out_of_sync()) {
-                    _out_of_sync = true;
-                    /* If the client monitor cannot handle the guest resolution
-                       drop back to windowed mode */
-                    exit_full_screen();
-                }
-
-                if (capture) {
-                    _main_screen->activate();
-                    _main_screen->capture_mouse();
-                }
+                rearrange_monitors(false, true, screen);
             } else {
                 screen->show(false, _main_screen);
             }
@@ -770,13 +755,7 @@ void Application::on_screen_destroyed(int id, bool was_captured)
     }
     _screens[id] = NULL;
     if (reposition) {
-        bool capture = was_captured || release_capture();
-        prepare_monitors();
-        position_screens();
-        if (capture) {
-            _main_screen->activate();
-            _main_screen->capture_mouse();
-        }
+        rearrange_monitors(was_captured, false);
     }
 }
 
@@ -1247,10 +1226,12 @@ void Application::on_key_down(RedKey key)
         }
     }
 
-    int command = get_hotkeys_commnad();
-    if (command != APP_CMD_INVALID) {
-        do_command(command);
-        return;
+    if (!_sticky_info.sticky_mode) {
+        int command = get_hotkeys_commnad();
+        if (command != APP_CMD_INVALID) {
+            do_command(command);
+            return;
+        }
     }
 
 #ifdef WIN32
@@ -1385,20 +1366,51 @@ void Application::on_screen_unlocked(RedScreen& screen)
     screen.resize(SCREEN_INIT_WIDTH, SCREEN_INIT_HEIGHT);
 }
 
-bool Application::rearrange_monitors(RedScreen& screen)
+void Application::rearrange_monitors(bool force_capture,
+                                     bool enter_full_screen,
+                                     RedScreen* screen)
 {
-    if (!_full_screen) {
-        return false;
+    bool capture;
+    bool toggle_full_screen;
+
+    if (!_full_screen && !enter_full_screen) {
+        return;
     }
-    bool capture = release_capture();
+
+    toggle_full_screen = enter_full_screen && !screen;
+    capture = release_capture();
+#ifndef WIN32
+    if (toggle_full_screen) {
+        /* performing hide during resolution changes resulted in
+           missing WM_KEYUP events */
+        hide();
+    }
+#endif
     prepare_monitors();
     position_screens();
-    if (capture && _main_screen != &screen) {
-        capture = false;
-        _main_screen->activate();
+    if (enter_full_screen) {
+        // toggling to full screen
+        if (toggle_full_screen) {
+            show_full_screen();
+            _main_screen->activate();
+
+        } else { // already in full screen mode and a new screen is displayed
+            screen->show_full_screen();
+            if (screen->is_out_of_sync()) {
+                _out_of_sync = true;
+                /* If the client monitor cannot handle the guest resolution
+                    drop back to windowed mode */
+                exit_full_screen();
+            }
+        }
+    } 
+
+    if (force_capture || capture) {
+        if (!toggle_full_screen) {
+            _main_screen->activate();
+        }
         _main_screen->capture_mouse();
     }
-    return capture;
 }
 
 Monitor* Application::find_monitor(int id)
@@ -1515,16 +1527,8 @@ void Application::enter_full_screen()
 {
     LOG_INFO("");
     _changing_screens = true;
-    bool capture = release_capture();
     assign_monitors();
-    hide();
-    prepare_monitors();
-    position_screens();
-    show_full_screen();
-    _main_screen->activate();
-    if (capture) {
-        _main_screen->capture_mouse();
-    }
+    rearrange_monitors(false, true);
     _changing_screens = false;
     _full_screen = true;
     /* If the client monitor cannot handle the guest resolution drop back
@@ -1586,7 +1590,14 @@ bool Application::toggle_full_screen()
 
 void Application::resize_screen(RedScreen *screen, int width, int height)
 {
+    Monitor* mon;
+    if (_full_screen) {
+        if ((mon = screen->get_monitor())) {
+            mon->set_mode(width, height);
+        }
+    }
     screen->resize(width, height);
+    rearrange_monitors(false, false);
     if (screen->is_out_of_sync()) {
         _out_of_sync = true;
         /* If the client monitor cannot handle the guest resolution
@@ -1999,7 +2010,14 @@ bool Application::set_host_cert_subject(const char* subject, const char* arg0)
                 _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
                 return false;
             }
-            entry_pair.first = entry.substr(0, value_pos);
+            size_t start_pos = entry.find_first_not_of(' ');
+            if ((start_pos == std::string::npos) || (start_pos == value_pos)) {
+                Platform::term_printf("%s: host_subject bad format: first part of assignment must be non empty in %s\n",
+                                      arg0, entry.c_str());
+                _exit_code = SPICEC_ERROR_CODE_INVALID_ARG;
+                return false;
+            }
+            entry_pair.first = entry.substr(start_pos, value_pos - start_pos);
             entry_pair.second = entry.substr(value_pos + 1);
             _host_auth_opt.host_subject.push_back(entry_pair);
             DBG(0, "subject entry: %s=%s", entry_pair.first.c_str(), entry_pair.second.c_str());
@@ -2181,7 +2199,8 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     DisplaySetting display_setting;
 
     enum {
-        SPICE_OPT_HOST = CmdLineParser::OPTION_FIRST_AVILABLE,
+        SPICE_OPT_VERSION = CmdLineParser::OPTION_FIRST_AVAILABLE,
+        SPICE_OPT_HOST,
         SPICE_OPT_PORT,
         SPICE_OPT_SPORT,
         SPICE_OPT_PASSWORD,
@@ -2222,6 +2241,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
 
     CmdLineParser parser("Spice client", false);
 
+    parser.add(SPICE_OPT_VERSION, "version", "spice client version", false);
     parser.add(SPICE_OPT_HOST, "host", "spice server address", "host", true, 'h');
     parser.add(SPICE_OPT_PORT, "port", "spice server port", "port", true, 'p');
     parser.add(SPICE_OPT_SPORT, "secure-port", "spice server secure port", "port", true, 's');
@@ -2254,11 +2274,14 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     parser.add(SPICE_OPT_CANVAS_TYPE, "canvas-type", "set rendering canvas", "canvas_type", true);
     parser.set_multi(SPICE_OPT_CANVAS_TYPE, ',');
 
-    parser.add(SPICE_OPT_DISPLAY_COLOR_DEPTH, "color-depth", "guest display color depth",
+    parser.add(SPICE_OPT_DISPLAY_COLOR_DEPTH, "color-depth",
+               "guest display color depth (if supported by the guest vdagent)",
                "16/32", true);
 
     parser.add(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, "disable-effects",
-               "disable guest display effects", "wallpaper/font-smooth/animation/all", true);
+               "disable guest display effects " \
+               "(if supported by the guest vdagent)",
+               "wallpaper/font-smooth/animation/all", true);
     parser.set_multi(SPICE_OPT_DISABLE_DISPLAY_EFFECTS, ',');
 
     parser.add(SPICE_OPT_CONTROLLER, "controller", "enable external controller");
@@ -2271,7 +2294,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     parser.add(SPICE_OPT_SMARTCARD_CERT, "smartcard-cert", "Use virtual reader+card with given cert(s)",
         "smartcard-cert", true);
     parser.set_multi(SPICE_OPT_SMARTCARD_CERT, ',');
-    parser.add(SPICE_OPT_SMARTCARD_DB, "smartcard-db", "Use given db for smartcard certs");
+    parser.add(SPICE_OPT_SMARTCARD_DB, "smartcard-db", "Use given db for smartcard certs", "smartcard-db", true);
 #endif
 
     for (int i = SPICE_CHANNEL_MAIN; i < SPICE_END_CHANNEL; i++) {
@@ -2284,6 +2307,12 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
     int op;
     while ((op = parser.get_option(&val)) != CmdLineParser::OPTION_DONE) {
         switch (op) {
+        case SPICE_OPT_VERSION: {
+            std::ostringstream os;
+            os << argv[0] << " "<< PACKAGE_VERSION << std::endl;
+            Platform::term_printf(os.str().c_str());
+            return false;
+        }
         case SPICE_OPT_HOST:
             host = val;
             break;
@@ -2395,6 +2424,9 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
                     _smartcard_options->certs.end(), std::string(val));
             } while ((val=parser.next_argument()));
             break;
+        case SPICE_OPT_SMARTCARD_DB:
+            _smartcard_options->dbname = val;
+            break;
 #endif
         case CmdLineParser::OPTION_HELP:
             parser.show_help();
@@ -2409,6 +2441,7 @@ bool Application::process_cmd_line(int argc, char** argv, bool &full_screen)
 
     if (host.empty()) {
         Platform::term_printf("%s: missing --host\n", argv[0]);
+        _exit_code = SPICEC_ERROR_CODE_CMD_LINE_ERROR;
         return false;
     }
 
@@ -2572,6 +2605,12 @@ int Application::main(int argc, char** argv, const char* version_str)
 {
     int ret;
     bool full_screen;
+    char *log_level_str;
+
+    log_level_str = getenv("SPICEC_LOG_LEVEL");
+    if (log_level_str) {
+        log_level = atoi(log_level_str);
+    }
 
     init_globals();
     LOG_INFO("starting %s", version_str);

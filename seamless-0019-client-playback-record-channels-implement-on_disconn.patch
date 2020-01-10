@@ -1,0 +1,178 @@
+From d3ed9d5e9d52ddcadcb3c8c77dd827b50071d813 Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Sun, 18 Sep 2011 21:42:18 +0300
+Subject: [PATCH 19/23] client: playback/record channels: implement
+ on_disconnect
+
+---
+ client/audio_channels.h     |   12 ++++++++++--
+ client/playback_channel.cpp |   22 ++++++++++++++++++++--
+ client/record_channel.cpp   |   39 ++++++++++++++++++++++++---------------
+ 3 files changed, 54 insertions(+), 19 deletions(-)
+
+diff --git a/client/audio_channels.h b/client/audio_channels.h
+index 695573a..2722e20 100644
+--- a/client/audio_channels.h
++++ b/client/audio_channels.h
+@@ -37,6 +37,9 @@ public:
+
+     static ChannelFactory& Factory();
+
++protected:
++    virtual void on_disconnect();
++
+ private:
+     void handle_mode(RedPeer::InMessage* message);
+     void handle_start(RedPeer::InMessage* message);
+@@ -48,6 +51,8 @@ private:
+
+     void set_data_handler();
+
++    void clear();
++
+ private:
+     WavePlaybackAbstract* _wave_player;
+     uint32_t _mode;
+@@ -67,12 +72,14 @@ public:
+
+     static ChannelFactory& Factory();
+
++protected:
++    virtual void on_connect();
++    virtual void on_disconnect();
++
+ private:
+     void handle_start(RedPeer::InMessage* message);
+     void handle_stop(RedPeer::InMessage* message);
+
+-    virtual void on_connect();
+-
+     virtual void add_event_source(EventSources::File& event_source);
+     virtual void remove_event_source(EventSources::File& event_source);
+     virtual void add_event_source(EventSources::Trigger& event_source);
+@@ -82,6 +89,7 @@ private:
+     void send_start_mark();
+     void release_message(RecordSamplesMessage *message);
+     RecordSamplesMessage * get_message();
++    void clear();
+
+ private:
+     WaveRecordAbstract* _wave_recorder;
+diff --git a/client/playback_channel.cpp b/client/playback_channel.cpp
+index 1e902a9..4a10cf7 100644
+--- a/client/playback_channel.cpp
++++ b/client/playback_channel.cpp
+@@ -169,19 +169,37 @@ PlaybackChannel::PlaybackChannel(RedClient& client, uint32_t id)
+     set_capability(SPICE_PLAYBACK_CAP_CELT_0_5_1);
+ }
+
+-PlaybackChannel::~PlaybackChannel(void)
++void PlaybackChannel::clear()
+ {
+-    delete _wave_player;
++    if (_wave_player) {
++        _playing = false;
++        _wave_player->stop();
++        delete _wave_player;
++        _wave_player = NULL;
++    }
++    _mode = SPICE_AUDIO_DATA_MODE_INVALID;
+
+     if (_celt_decoder) {
+         celt051_decoder_destroy(_celt_decoder);
++        _celt_decoder = NULL;
+     }
+
+     if (_celt_mode) {
+         celt051_mode_destroy(_celt_mode);
++        _celt_mode = NULL;
+     }
+ }
+
++void PlaybackChannel::on_disconnect()
++{
++    clear();
++}
++
++PlaybackChannel::~PlaybackChannel(void)
++{
++    clear();
++}
++
+ bool PlaybackChannel::abort(void)
+ {
+     return (!_wave_player || _wave_player->abort()) && RedChannel::abort();
+diff --git a/client/record_channel.cpp b/client/record_channel.cpp
+index 084866c..a655866 100644
+--- a/client/record_channel.cpp
++++ b/client/record_channel.cpp
+@@ -98,14 +98,7 @@ RecordChannel::~RecordChannel(void)
+         _messages.pop_front();
+         delete mes;
+     }
+-    delete _wave_recorder;
+-
+-    if (_celt_encoder) {
+-        celt051_encoder_destroy(_celt_encoder);
+-    }
+-    if (_celt_mode) {
+-        celt051_mode_destroy(_celt_mode);
+-    }
++    clear();
+ }
+
+ bool RecordChannel::abort(void)
+@@ -125,6 +118,11 @@ void RecordChannel::on_connect()
+     post_message(message);
+ }
+
++void RecordChannel::on_disconnect()
++{
++    clear();
++}
++
+ void RecordChannel::send_start_mark()
+ {
+     Message* message = new Message(SPICE_MSGC_RECORD_START_MARK);
+@@ -174,6 +172,23 @@ void RecordChannel::handle_start(RedPeer::InMessage* message)
+     _wave_recorder->start();
+ }
+
++void RecordChannel::clear()
++{
++    if (_wave_recorder) {
++        _wave_recorder->stop();
++        delete _wave_recorder;
++        _wave_recorder = NULL;
++    }
++    if (_celt_encoder) {
++        celt051_encoder_destroy(_celt_encoder);
++        _celt_encoder = NULL;
++    }
++    if (_celt_mode) {
++        celt051_mode_destroy(_celt_mode);
++        _celt_mode = NULL;
++    }
++}
++
+ void RecordChannel::handle_stop(RedPeer::InMessage* message)
+ {
+     RecordHandler* handler = static_cast<RecordHandler*>(get_message_handler());
+@@ -183,13 +198,7 @@ void RecordChannel::handle_stop(RedPeer::InMessage* message)
+         return;
+     }
+     ASSERT(_celt_mode && _celt_encoder);
+-    _wave_recorder->stop();
+-    celt051_encoder_destroy(_celt_encoder);
+-    _celt_encoder = NULL;
+-    celt051_mode_destroy(_celt_mode);
+-    _celt_mode = NULL;
+-    delete _wave_recorder;
+-    _wave_recorder = NULL;
++    clear();
+ }
+
+ RecordSamplesMessage* RecordChannel::get_message()
+-- 
+1.7.6.2
+

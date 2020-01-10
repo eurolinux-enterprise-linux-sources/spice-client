@@ -1,0 +1,122 @@
+From 6e56bea67c5648b0c81990171d4bc0cf1a402043 Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Wed, 14 Sep 2011 14:21:49 +0300
+Subject: [PATCH 01/23] server/spice.h: semi-seamless migration interface,
+ RHBZ #738266
+
+semi-seamless migration details:
+
+migration source side
+---------------------
+(1) spice_server_migrate_connect (*): tell client to link
+    to the target side - send SPICE_MSG_MAIN_MIGRATE_BEGIN.
+    This should be called upon client_migrate_info cmd.
+    client_migrate_info is asynchronous.
+(2) Complete spice_server_migrate_connect only when the client has been connected
+    to the target - wait for SPICE_MSGC_MAIN_MIGRATE_(CONNECTED|CONNECT_ERROR) or a timeout.
+(3) spice_server_migrate_end: tell client migration it can switch to the target - send
+    SPICE_MSG_MAIN_MIGRATE_END.
+(4) client cleans up all data related to the connection to the source and switches to the target.
+    It sends SPICE_MSGC_MAIN_MIGRATE_END.
+
+migration target side
+---------------------
+(1) the server identifies itself as a migraiton target since the client is linked with (connection_id != 0)
+(2) server doesn't start the channels' logic (channel->link) till it receives SPICE_MSGC_MAIN_MIGRATE_END
+    from the client.
+
+*   After migration starts, the target qemu is blocked and cannot accept new spice client
+    connections. Thus, we trigger the connection to the target upon client_migrate_info
+    command.
+---
+ server/reds.c               |    9 +++++++++
+ server/spice-experimental.h |    3 ---
+ server/spice.h              |   27 ++++++++++++++++++++++++++-
+ 3 files changed, 35 insertions(+), 4 deletions(-)
+
+diff --git a/server/reds.c b/server/reds.c
+index f082c53..9a983f8 100644
+--- a/server/reds.c
++++ b/server/reds.c
+@@ -4854,6 +4854,15 @@ SPICE_GNUC_VISIBLE int spice_server_set_agent_copypaste(SpiceServer *s, int enab
+     return 0;
+ }
+
++/* semi-seamless client migration */
++SPICE_GNUC_VISIBLE int spice_server_migrate_connect(SpiceServer *s, const char* dest,
++                                                    int port, int secure_port,
++                                                    const char* cert_subject)
++{
++    red_printf("not implemented yet");
++    return 0;
++}
++
+ SPICE_GNUC_VISIBLE int spice_server_migrate_info(SpiceServer *s, const char* dest,
+                                           int port, int secure_port,
+                                           const char* cert_subject)
+diff --git a/server/spice-experimental.h b/server/spice-experimental.h
+index 482ac44..6997aa0 100644
+--- a/server/spice-experimental.h
++++ b/server/spice-experimental.h
+@@ -29,16 +29,13 @@ void spice_server_net_wire_recv_packet(SpiceNetWireInstance *sin,
+                                        const uint8_t *pkt, int len);
+
+ /* spice seamless client migration (broken) */
+-
+ enum {
+     SPICE_MIGRATE_CLIENT_NONE = 1,
+     SPICE_MIGRATE_CLIENT_WAITING,
+     SPICE_MIGRATE_CLIENT_READY,
+ };
+
+-int spice_server_migrate_start(SpiceServer *s);
+ int spice_server_migrate_client_state(SpiceServer *s);
+-int spice_server_migrate_end(SpiceServer *s, int completed);
+
+ #endif // __SPICE_EXPERIMENTAL_H__
+
+diff --git a/server/spice.h b/server/spice.h
+index ac5a41e..42ddbc6 100644
+--- a/server/spice.h
++++ b/server/spice.h
+@@ -469,11 +469,36 @@ int spice_server_set_agent_copypaste(SpiceServer *s, int enable);
+ int spice_server_get_sock_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
+ int spice_server_get_peer_info(SpiceServer *s, struct sockaddr *sa, socklen_t *salen);
+
+-/* spice switch-host client migration */
++/* migration interface */
++#define SPICE_INTERFACE_MIGRATION "migration"
++#define SPICE_INTERFACE_MIGRATION_MAJOR 1
++#define SPICE_INTERFACE_MIGRATION_MINOR 1
++typedef struct SpiceMigrateInterface SpiceMigrateInterface;
++typedef struct SpiceMigrateInstance SpiceMigrateInstance;
++typedef struct SpiceMigrateState SpiceMigrateState;
++
++struct SpiceMigrateInterface {
++    SpiceBaseInterface base;
++    void (*migrate_connect_complete)(SpiceMigrateInstance *sin);
++    void (*migrate_end_complete)(SpiceMigrateInstance *sin);
++};
++
++struct SpiceMigrateInstance {
++    SpiceBaseInstance base;
++    SpiceMigrateState *st;
++};
+
++/* spice switch-host client migration */
+ int spice_server_migrate_info(SpiceServer *s, const char* dest,
+                               int port, int secure_port,
+                               const char* cert_subject);
+ int spice_server_migrate_switch(SpiceServer *s);
+
++/* spice (semi-)seamless client migration */
++int spice_server_migrate_connect(SpiceServer *s, const char* dest,
++                                 int port, int secure_port,
++                                 const char* cert_subject);
++int spice_server_migrate_start(SpiceServer *s);
++int spice_server_migrate_end(SpiceServer *s, int completed);
++
+ #endif
+-- 
+1.7.6.2
+

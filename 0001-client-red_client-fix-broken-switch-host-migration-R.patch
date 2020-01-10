@@ -1,0 +1,28 @@
+From 6862c810f311ecc5c6cc945cb8c0104415aac765 Mon Sep 17 00:00:00 2001
+From: Alon Levy <alevy@redhat.com>
+Date: Wed, 3 Aug 2011 22:54:53 +0300
+Subject: [PATCH] client/red_client: fix broken switch host migration (RHBZ
+ 727969)
+
+3f8d7e59dbd94b1837503f37b5065698df3ffbc7 introduced a regression, after
+sending one attach_channels message we never send another one.
+Fix by resetting on disconnect.
+---
+ client/red_client.cpp |    1 +
+ 1 files changed, 1 insertions(+), 0 deletions(-)
+
+diff --git a/client/red_client.cpp b/client/red_client.cpp
+index 330c6b5..3de359d 100644
+--- a/client/red_client.cpp
++++ b/client/red_client.cpp
+@@ -538,6 +538,7 @@ void RedClient::connect(bool wait_main_disconnect)
+ void RedClient::disconnect()
+ {
+     _migrate.abort();
++    _msg_attach_channels_sent = false;
+     RedChannel::disconnect();
+ }
+ 
+-- 
+1.7.6
+

@@ -1,0 +1,69 @@
+From 4a26fa01cdd1c341d5f0cca08655c9c08064b987 Mon Sep 17 00:00:00 2001
+From: Yonit Halperin <yhalperi@redhat.com>
+Date: Wed, 21 Sep 2011 17:31:00 +0300
+Subject: [PATCH 23/23] Release 0.8.3
+
+---
+ NEWS                     |    8 ++++++++
+ configure.ac             |    2 +-
+ server/spice-server.syms |    4 ++++
+ server/spice.h           |    2 +-
+ 4 files changed, 14 insertions(+), 2 deletions(-)
+
+diff --git a/NEWS b/NEWS
+index ee6ceec..e9ed92e 100644
+--- a/NEWS
++++ b/NEWS
+@@ -1,3 +1,11 @@
++Major changes in 0.8.3:
++=======================
++* server Bug fixes (RHBZ): 718713
++* client Bug fixes (RHBZ): 726441, 727969, 728252
++* server: semi-seamless migration support (RHBZ 738266)
++* client: semi-seamless migration support (RHBZ 725009, 738270)
++* require spice-protocol >= 0.8.2
++
+ Major changes in 0.8.2:
+ =======================
+ * server: sasl support (fdo bz 34795)
+diff --git a/configure.ac b/configure.ac
+index e169f36..7fb636f 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -2,7 +2,7 @@ AC_PREREQ([2.57])
+
+ m4_define([SPICE_MAJOR], 0)
+ m4_define([SPICE_MINOR], 8)
+-m4_define([SPICE_MICRO], 2)
++m4_define([SPICE_MICRO], 3)
+
+ AC_INIT(spice, [SPICE_MAJOR.SPICE_MINOR.SPICE_MICRO], [], spice)
+
+diff --git a/server/spice-server.syms b/server/spice-server.syms
+index 826c562..62cdc18 100644
+--- a/server/spice-server.syms
++++ b/server/spice-server.syms
+@@ -81,3 +81,7 @@ global:
+     spice_qxl_destroy_surface_async;
+     spice_qxl_flush_surfaces_async;
+ } SPICE_SERVER_0.8.1;
++
++SPICE_SERVER_0.8.3 {
++    spice_server_migrate_connect;
++} SPICE_SERVER_0.8.2;
+diff --git a/server/spice.h b/server/spice.h
+index 42ddbc6..ce2d149 100644
+--- a/server/spice.h
++++ b/server/spice.h
+@@ -22,7 +22,7 @@
+ #include <sys/socket.h>
+ #include <spice/qxl_dev.h>
+
+-#define SPICE_SERVER_VERSION 0x000802 /* release 0.8.2 */
++#define SPICE_SERVER_VERSION 0x000803 /* release 0.8.3 */
+
+ /* interface base type */
+
+-- 
+1.7.6.2
+
